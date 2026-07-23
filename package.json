@@ -1,0 +1,9 @@
+{
+  "name": "paperpoker",
+  "version": "0.1.0",
+  "description": "Free-play Texas Hold'em with customizable bots and EV/quant stats.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

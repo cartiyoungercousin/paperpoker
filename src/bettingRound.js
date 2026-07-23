@@ -11,16 +11,18 @@
 // raises) but fine for an MVP - worth revisiting before calling betting
 // "rules-complete."
 export class BettingRound {
-  constructor({ players, actingIndex = 0, minRaise }) {
-    // players: [{ id, stack }]
+  constructor({ players, actingIndex = 0, minRaise, currentBet = 0 }) {
+    // players: [{ id, stack, contributed }] - contributed is optional and
+    // lets a caller pre-post forced bets (blinds) before betting starts;
+    // it defaults to 0, so existing callers are unaffected.
     this.players = players.map((p) => ({
       id: p.id,
       stack: p.stack,
-      contributed: 0, // chips put in during THIS street only
+      contributed: p.contributed || 0, // chips put in during THIS street
       folded: false,
-      allIn: false,
+      allIn: p.stack === 0, // covers a blind that used a player's whole stack
     }));
-    this.currentBet = 0;
+    this.currentBet = currentBet;
     this.minRaise = minRaise;
     this.actingIndex = actingIndex;
     this.actedSinceLastAggression = new Set();

@@ -18,12 +18,15 @@ function fixedDeck(cardsInDealOrder) {
 }
 
 test("a full heads-up hand plays out correctly to showdown", () => {
-  // Deal order: alice's 2 hole cards, bob's 2 hole cards, flop (3), turn (1), river (1)
+  // Deal order: alice's 2 hole cards, bob's 2 hole cards, burn, flop (3), burn, turn (1), burn, river (1)
   const deck = fixedDeck([
     c(14, "h"), c(13, "h"), // alice: Ah Kh
     c(2, "c"), c(3, "d"), // bob: 2c 3d
+    c(1, "s"), // burn
     c(9, "s"), c(7, "d"), c(4, "c"), // flop
+    c(1, "d"), // burn
     c(10, "h"), // turn
+    c(1, "c"), // burn
     c(6, "s"), // river
   ]);
 
@@ -95,6 +98,8 @@ test("3-handed: correct blind assignment and preflop action order", () => {
     c(2, "h"), c(3, "h"), // a
     c(4, "c"), c(5, "c"), // b
     c(6, "d"), c(7, "d"), // c
+    c(1, "s"), // burn
+    c(9, "s"), c(8, "s"), c(7, "s"), // flop
   ]);
 
   const hand = new Hand({

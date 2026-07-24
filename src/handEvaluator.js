@@ -1,3 +1,5 @@
+import { rankName } from "./deck.js";
+
 // Hand categories, higher number = better hand.
 export const CATEGORY = {
   HIGH_CARD: 0,
@@ -105,13 +107,15 @@ function combinations(arr, k) {
   return results;
 }
 
-// Given 7 cards (2 hole + 5 board), finds the best possible 5-card hand.
+// Given any 5, 6, or 7 cards, finds the best possible 5-card hand among
+// them. Useful mid-hand (flop = 2 hole + 3 board = 5 cards, turn = 2 hole
+// + 4 board = 6 cards) as well as at showdown (2 hole + 5 board = 7).
 // Returns { score, cards } where cards is the best 5-card combination.
-export function bestOf7(sevenCards) {
-  if (sevenCards.length !== 7) {
-    throw new Error("bestOf7 requires exactly 7 cards");
+export function bestHand(cards) {
+  if (cards.length < 5) {
+    throw new Error("bestHand requires at least 5 cards");
   }
-  const combos = combinations(sevenCards, 5);
+  const combos = combinations(cards, 5);
   let best = null;
   for (const combo of combos) {
     const score = evaluate5(combo);
@@ -120,4 +124,43 @@ export function bestOf7(sevenCards) {
     }
   }
   return best;
+}
+
+// Given 7 cards (2 hole + 5 board), finds the best possible 5-card hand.
+// Returns { score, cards } where cards is the best 5-card combination.
+export function bestOf7(sevenCards) {
+  if (sevenCards.length !== 7) {
+    throw new Error("bestOf7 requires exactly 7 cards");
+  }
+  return bestHand(sevenCards);
+}
+
+// Produces a short human-readable description of a hand score, e.g.
+// "Two Pair, Aces and Kings" or "Ace-high Straight". Used for showdown
+// display in the UI / hand history.
+export function describeScore(score) {
+  const [cat, ...rest] = score;
+  const rn = (r) => rankName(r);
+  const plural = (r) => (rn(r) === "6" || rn(r).endsWith("s") ? `${rn(r)}'s` : `${rn(r)}s`);
+
+  switch (cat) {
+    case CATEGORY.STRAIGHT_FLUSH:
+      return rest[0] === 14 ? "Royal Flush" : `${rn(rest[0])}-high Straight Flush`;
+    case CATEGORY.FOUR_OF_A_KIND:
+      return `Four of a Kind, ${plural(rest[0])}`;
+    case CATEGORY.FULL_HOUSE:
+      return `Full House, ${plural(rest[0])} full of ${plural(rest[1])}`;
+    case CATEGORY.FLUSH:
+      return `Flush, ${rn(rest[0])} high`;
+    case CATEGORY.STRAIGHT:
+      return `${rn(rest[0])}-high Straight`;
+    case CATEGORY.THREE_OF_A_KIND:
+      return `Three of a Kind, ${plural(rest[0])}`;
+    case CATEGORY.TWO_PAIR:
+      return `Two Pair, ${plural(rest[0])} and ${plural(rest[1])}`;
+    case CATEGORY.ONE_PAIR:
+      return `Pair of ${plural(rest[0])}`;
+    default:
+      return `${rn(rest[0])} High`;
+  }
 }

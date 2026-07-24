@@ -8,18 +8,9 @@ const STREETS = ["preflop", "flop", "turn", "river"];
 
 // Orchestrates one complete poker hand: posts blinds, deals hole cards,
 // runs betting through preflop/flop/turn/river (dealing community cards
-// between streets), and resolves payouts at showdown - or immediately if
-// everyone but one player folds.
-//
-// KNOWN SIMPLIFICATION: heads-up (2-player) postflop action order uses
-// the same general rule as 3+ players (small blind acts first), rather
-// than the special heads-up rule where the big blind acts first
-// postflop. Preflop heads-up order is correct (small blind/dealer acts
-// first). Worth a dedicated fix before relying on this for heads-up play
-// specifically - fine for 3+ handed tables as-is.
+// between streets with burn cards), and resolves payouts at showdown.
 export class Hand {
   constructor({ players, minRaise, smallBlind, bigBlind, dealerIndex = 0, deck }) {
-    // players: [{ id, stack }] in seat order (seat 0, 1, 2... clockwise)
     this.order = players.map((p) => p.id);
     this.stacks = new Map(players.map((p) => [p.id, p.stack]));
     this.minRaise = minRaise;
@@ -32,6 +23,7 @@ export class Hand {
     this.totalContributed = new Map(players.map((p) => [p.id, 0]));
     this.holeCards = new Map();
     this.board = [];
+    this.burnCards = [];
     this.streetIndex = 0;
     this.currentRound = null;
     this.complete = false;
@@ -94,10 +86,22 @@ export class Hand {
     return this.currentRound.legalActions(playerId);
   }
 
+  _burn() {
+    const [burned] = this.deck.draw(1);
+    this.burnCards.push(burned);
+  }
+
   _startStreet() {
     const streetName = this.currentStreetName();
-    if (streetName === "flop") this.board.push(...this.deck.draw(3));
-    else if (streetName === "turn" || streetName === "river") this.board.push(...this.deck.draw(1));
+
+    // Burn before dealing community cards
+    if (streetName === "flop") {
+      this._burn();
+      this.board.push(...this.deck.draw(3));
+    } else if (streetName === "turn" || streetName === "river") {
+      this._burn();
+      this.board.push(...this.deck.draw(1));
+    }
 
     const activeIds = this._activePlayers();
     if (activeIds.length <= 1) {
@@ -127,6 +131,7 @@ export class Hand {
       actingIndex,
       minRaise: this.minRaise,
       currentBet,
+      numPlayersAtStart: this._activePlayers().length,
     });
 
     if (this.currentRound.isComplete()) this._closeStreet();
@@ -160,6 +165,7 @@ export class Hand {
 
   _bestAmong(playerIds, showdownResults) {
     const relevant = showdownResults.filter((r) => playerIds.includes(r.id));
+    if (relevant.length === 0) return [];
     let bestIds = [relevant[0].id];
     let bestScore = relevant[0].score;
     for (const r of relevant.slice(1)) {
@@ -194,9 +200,9 @@ export class Hand {
       return;
     }
 
-    // If betting finished early (e.g. everyone went all-in preflop), deal
-    // out whatever's left of the board before resolving showdown.
+    // Deal remaining board if hand ended early (e.g. all-ins preflop)
     while (this.board.length < 5) {
+      this._burn();
       const need = 5 - this.board.length;
       this.board.push(...this.deck.draw(need === 2 ? 3 : need));
     }
@@ -206,10 +212,23 @@ export class Hand {
 
     for (const pot of pots) {
       const potWinners = this._bestAmong(pot.eligiblePlayerIds, showdown.results);
+      if (potWinners.length === 0) continue;
       const share = Math.floor(pot.amount / potWinners.length);
       let remainder = pot.amount - share * potWinners.length;
-      for (const id of potWinners) {
-        payouts.set(id, payouts.get(id) + share + (remainder > 0 ? 1 : 0));
+
+      // Award odd chips to the winner closest to the left of the dealer button
+      const sortedWinners = [...potWinners].sort((a, b) => {
+        const aIdx = this.order.indexOf(a);
+        const bIdx = this.order.indexOf(b);
+        const dealerIdx = this.dealerIndex;
+        const aDist = (aIdx - dealerIdx + this.order.length) % this.order.length;
+        const bDist = (bIdx - dealerIdx + this.order.length) % this.order.length;
+        return aDist - bDist;
+      });
+
+      for (const id of sortedWinners) {
+        const extra = remainder > 0 ? 1 : 0;
+        payouts.set(id, payouts.get(id) + share + extra);
         if (remainder > 0) remainder -= 1;
       }
     }

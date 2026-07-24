@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Paper Poker — Texas Hold'em</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- ===== HOME SCREEN ===== -->
+  <div id="home-screen">
+    <div id="home-bg"></div>
+    <div id="home-content">
+      <div id="home-deco">♠ ♥ ♣ ♦</div>
+      <h1 id="home-title">Paper Poker</h1>
+      <p id="home-tagline">For both the casual and quantitative player</p>
+      <p id="home-subtitle">Texas Hold'em</p>
+      <div id="home-form">
+        <div class="fg">
+          <label>Username</label>
+          <input type="text" id="input-username" placeholder="Your name" maxlength="16" value="You" />
+        </div>
+        <div class="fg">
+          <label>Difficulty</label>
+          <div id="difficulty-boxes">
+            <div class="diff-box" data-diff="easy" style="background:rgba(76,175,80,0.7);color:#fff">Easy</div>
+            <div class="diff-box" data-diff="medium" style="background:rgba(255,193,7,0.7);color:#000">Medium</div>
+            <div class="diff-box" data-diff="hard" style="background:rgba(239,83,80,0.7);color:#fff">Hard</div>
+            <div class="diff-box" data-diff="expert" style="background:rgba(255,255,255,0.2);color:#fff">Expert</div>
+          </div>
+          <input type="hidden" id="input-difficulty" value="easy" />
+        </div>
+        <div id="home-config-row">
+          <button id="btn-show-settings" class="sec-btn config-btn">⚙ Game Config</button>
+          <button id="btn-volume-settings" class="sec-btn icon-btn" title="Site Settings">⚙ Settings</button>
+        </div>
+      </div>
+      <div id="home-actions">
+        <button id="btn-home-start">Start Game</button>
+      </div>
+    </div>
+    <!-- Site Settings Modal -->
+    <div id="site-settings-modal" class="hidden">
+      <div id="site-settings-content">
+        <h2>Site Settings</h2>
+        <div class="ss-fg">
+          <label>Master Volume <span id="volume-val">80%</span></label>
+          <input type="range" id="set-volume" min="0" max="100" value="80" />
+        </div>
+        <div id="site-settings-actions">
+          <button id="btn-site-settings-ok" class="sec-btn" style="width:auto">Close</button>
+        </div>
+      </div>
+    </div>
+    <div id="settings-modal" class="hidden">
+      <div id="settings-content">
+        <h2>Table Settings</h2>
+        <div id="settings-form">
+          <div class="fg">
+            <label>Number of Players</label>
+            <select id="set-players">
+              <option value="2">2 (Heads-Up)</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6" selected>6</option>
+              <option value="7">7</option>
+              <option value="8">8</option>
+              <option value="9">9</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Starting Stack</label>
+            <select id="set-stack">
+              <option value="500">500</option>
+              <option value="1000" selected>1,000</option>
+              <option value="2500">2,500</option>
+              <option value="5000">5,000</option>
+              <option value="10000">10,000</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Time Limit</label>
+            <select id="set-shot-clock">
+              <option value="0" selected>Off</option>
+              <option value="5">5 seconds</option>
+              <option value="10">10 seconds</option>
+              <option value="15">15 seconds</option>
+              <option value="30">30 seconds</option>
+              <option value="60">1 minute</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Small Blind / Big Blind</label>
+            <div class="blind-row">
+              <select id="set-sb">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+              <span class="blind-sep">/</span>
+              <select id="set-bb">
+                <option value="10">10</option>
+                <option value="20" selected>20</option>
+                <option value="30">30</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div id="settings-actions">
+          <button id="btn-settings-ok">Apply</button>
+          <button id="btn-settings-cancel" class="sec-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MAIN GAME ===== -->
+  <div id="app" class="hidden">
+    <!-- Pause Modal -->
+    <div id="pause-modal" class="hidden">
+      <div id="pause-card">
+        <h2>Game Paused</h2>
+        <p>Game is paused. Click below to resume playing.</p>
+        <button id="btn-resume-game">▶ Resume Game</button>
+      </div>
+    </div>
+    <div id="pre-hand-overlay" class="hidden">
+      <div id="pre-hand-card">
+        <h2>Bot Customization</h2>
+        <p>Configure your opponents before the hand begins.</p>
+        <div id="bot-customize-form">
+          <div class="bc-fg">
+            <label>Personality</label>
+            <select id="bc-personality">
+              <option value="TAG">TAG (Tight-Aggressive)</option>
+              <option value="LAG">LAG (Loose-Aggressive)</option>
+              <option value="tight-passive">Tight-Passive</option>
+              <option value="loose-passive">Loose-Passive</option>
+              <option value="maniac">Maniac</option>
+              <option value="calling-station">Calling Station</option>
+            </select>
+          </div>
+          <div class="bc-fg">
+            <label>Passiveness <span style="color:#4dd0e1">◀</span> — Aggressiveness <span style="color:#ef5350">▶</span></label>
+            <div class="bc-slider-row">
+              <span style="color:#4dd0e1;font-size:0.6rem">Passive</span>
+              <input type="range" id="bc-aggression" min="0" max="100" value="50" class="agg-slider" />
+              <span style="color:#ef5350;font-size:0.6rem">Aggressive</span>
+            </div>
+          </div>
+          <div class="bc-fg">
+            <label>Bluff Frequency</label>
+            <input type="range" id="bc-bluff" min="0" max="50" value="15" class="bc-range" />
+            <span id="bc-bluff-val" class="bc-range-val">15%</span>
+          </div>
+          <div class="bc-fg">
+            <label>Fold to 3-Bet</label>
+            <input type="range" id="bc-fold3bet" min="0" max="100" value="65" class="bc-range" />
+            <span id="bc-fold3bet-val" class="bc-range-val">65%</span>
+          </div>
+        </div>
+        <button id="btn-start-hand">Start Hand</button>
+      </div>
+    </div>
+
+    <!-- Header -->
+    <div id="header">
+      <div id="hl">
+        <a id="logo-link" href="#">♠ Paper Poker</a>
+        <span id="hu"></span>
+        <span id="hm">Easy</span>
+      </div>
+      <div id="hc">
+        <span id="h-counter">Hand #0</span>
+        <span class="hd">|</span>
+        <span id="h-street">—</span>
+        <span class="hd">|</span>
+        <span id="h-pot">Pot $0</span>
+        <span class="hd">|</span>
+        <span id="h-blinds">10/20</span>
+      </div>
+      <div id="hr">
+        <button id="btn-pause-game" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto">⏸ Pause</button>
+        <button id="btn-toggle-stats">Stats</button>
+        <button id="btn-home-return">Leave</button>
+      </div>
+    </div>
+
+    <!-- Main Layout -->
+    <div id="main-layout">
+    <!-- Left: History + Turn Indicator -->
+    <div id="left-panel">
+      <div id="turn-indicator-box">
+        <span id="turn-indicator">Waiting...</span>
+      </div>
+      <div id="history-box">
+        <div id="history-header">Hand History</div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+
+      <!-- Center: Table -->
+      <div id="center-area">
+        <div id="table-wrapper">
+          <!-- The felt -->
+          <div id="table-felt">
+            <div id="tf-stitch-outer"></div>
+            <div id="tf-inner-ring"></div>
+            <div id="tf-label">TEXAS HOLD'EM</div>
+            <div id="tf-felt-texture"></div>
+            <!-- Community cards -->
+            <div id="board-area">
+              <div class="bc" data-i="0"></div>
+              <div class="bc" data-i="1"></div>
+              <div class="bc" data-i="2"></div>
+              <div class="bc" data-i="3"></div>
+              <div class="bc" data-i="4"></div>
+            </div>
+            <!-- Pot display -->
+            <div id="pot-center">
+              <span id="pot-label">POT</span>
+              <span id="pot-value">$0</span>
+            </div>
+            <!-- Result overlay -->
+            <div id="result-overlay" class="hidden">
+              <div id="result-content">
+                <h2 id="result-title">Hand Complete</h2>
+                <div id="result-details"></div>
+                <div id="result-actions">
+                  <button id="btn-next-hand">Next Hand</button>
+                  <button id="btn-analyze-hand" class="sec-btn">Analyze Hand</button>
+                  <label id="toggle-reset-label"><input type="checkbox" id="toggle-reset" /> Reset balance each hand</label>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- Seat containers -->
+          <div id="seats-container"></div>
+        </div>
+
+        <!-- Action Popups -->
+        <div id="action-popup-area"></div>
+
+        <!-- Timer Bar -->
+        <div id="timer-container">
+          <span id="timer-label">Time</span>
+          <div id="timer-bar-bg">
+            <div id="timer-bar-fill"></div>
+          </div>
+          <span id="timer-text"></span>
+        </div>
+
+        <!-- Player's cards -->
+        <div id="player-area">
+          <div id="player-cards">
+            <div class="pc" data-i="0"></div>
+            <div class="pc" data-i="1"></div>
+          </div>
+          <div id="player-info">
+            <span id="player-name-display">You (You)</span>
+            <span id="player-stack-display">$1,000</span>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div id="action-bar" style="display:none">
+          <button id="btn-fold" class="act-btn fold-btn">Fold</button>
+          <button id="btn-check" class="act-btn check-btn">Check</button>
+          <button id="btn-call" class="act-btn call-btn">Call</button>
+          <div id="bet-area" style="display:none">
+            <input type="range" id="bet-slider" min="20" max="1000" step="10" value="20" />
+            <input type="number" id="bet-amount" value="20" />
+            <button id="btn-bet" class="act-btn bet-btn">Bet</button>
+            <button id="btn-raise" class="act-btn raise-btn">Raise</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right spacer -->
+      <div id="right-spacer"></div>
+    </div>
+  </div>
+
+  <!-- ===== HAND ANALYZER MODAL ===== -->
+  <div id="analyzer-modal" class="hidden">
+    <div id="analyzer-content">
+      <div id="analyzer-head">
+        <span>Hand Analysis</span>
+        <button id="btn-close-analyzer">✕</button>
+      </div>
+      <div id="analyzer-body">
+        <div id="analyzer-replay">
+          <div id="analyzer-replay-header">Replay Timeline</div>
+          <div id="analyzer-replay-steps"></div>
+        </div>
+        <div id="analyzer-stats">
+          <div class="arow"><span>Your Hand</span><span id="aa-hand">—</span></div>
+          <div class="arow"><span>Board</span><span id="aa-board">—</span></div>
+          <div class="arow"><span>Best Hand</span><span id="aa-best">—</span></div>
+          <div class="arow"><span>Equity Pre-Flop</span><span id="aa-eq-pre">—</span></div>
+          <div class="arow"><span>Equity on Flop</span><span id="aa-eq-flop">—</span></div>
+          <div class="arow"><span>Equity on Turn</span><span id="aa-eq-turn">—</span></div>
+          <div class="arow"><span>Equity on River</span><span id="aa-eq-river">—</span></div>
+          <div class="arow"><span>Pot Odds Faced</span><span id="aa-pot-odds">—</span></div>
+          <div class="arow"><span>Recommended Action</span><span id="aa-recommend">—</span></div>
+          <div class="arow"><span>Your Action</span><span id="aa-your-action">—</span></div>
+          <div class="arow"><span>EV of Your Action</span><span id="aa-ev">—</span></div>
+          <div class="arow"><span>Mistake?</span><span id="aa-mistake" style="font-weight:600">—</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== STATS PANEL ===== -->
+  <div id="stats-panel" class="hidden">
+    <div id="stats-head"><span>Session Stats</span><button id="btn-close-stats">✕</button></div>
+    <div id="stats-body">
+      <!-- Live Balance Graph -->
+      <div id="stats-graph-section">
+        <div id="stats-graph-header">Balance Over Time</div>
+        <canvas id="balance-graph" width="248" height="120"></canvas>
+      </div>
+      <div class="sr"><span class="sl">Hands Played</span><span class="sv" id="st-hp">0</span></div>
+      <div class="sr"><span class="sl">Hands Won</span><span class="sv" id="st-hw">0</span></div>
+      <div class="sr"><span class="sl">Win Rate</span><span class="sv" id="st-wr">0%</span></div>
+      <div class="sr"><span class="sl">Total Winnings</span><span class="sv" id="st-tw">$0</span></div>
+      <div class="sr"><span class="sl">Biggest Pot</span><span class="sv" id="st-bp">$0</span></div>
+      <div class="sr"><span class="sl">Current Stack</span><span class="sv" id="st-cs">$0</span></div>
+      <div class="sr"><span class="sl">Net Profit</span><span class="sv" id="st-np">$0</span></div>
+      <div class="sr"><span class="sl">Return on Investment</span><span class="sv" id="st-roi">—</span></div>
+      <div class="sr"><span class="sl">VPIP</span><span class="sv" id="st-vp">0%</span></div>
+      <div class="sr"><span class="sl">Aggression Factor</span><span class="sv" id="st-af">—</span></div>
+      <div class="sr"><span class="sl">Fold %</span><span class="sv" id="st-fp">0%</span></div>
+      <div class="sr"><span class="sl">Bets / Raises</span><span class="sv" id="st-br">0</span></div>
+      <div class="sr"><span class="sl">Calls</span><span class="sv" id="st-ca">0</span></div>
+      <div class="sr"><span class="sl">Checks</span><span class="sv" id="st-ch">0</span></div>
+      <div class="sr"><span class="sl">Expected Value (EV)</span><span class="sv" id="st-ev">—</span></div>
+      <div class="sr"><span class="sl">EV Captured</span><span class="sv" id="st-evcap">—</span></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const socket = io();
+    const SS = { h:'♥', d:'♦', c:'♣', s:'♠' };
+    const SC = { h:'#d32f2f', d:'#d32f2f', c:'#1a1a2e', s:'#1a1a2e' };
+    const RD = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
+
+    let playerName = 'You';
+    let settings = { numPlayers: 6, startingStack: 1000, smallBlind: 10, bigBlind: 20, shotClockSeconds: 0, difficulty: 'easy' };
+    let timerInterval = null;
+    let timerRemaining = 0;
+    let timerTotal = 0;
+    let balanceHistory = [];
+
+    // ===== CATEGORY constants (mirror server) =====
+    const CATEGORY = { HIGH_CARD:0, ONE_PAIR:1, TWO_PAIR:2, THREE_OF_A_KIND:3, STRAIGHT:4, FLUSH:5, FULL_HOUSE:6, FOUR_OF_A_KIND:7, STRAIGHT_FLUSH:8 };
+
+    function getDisplayName(name) {
+      const raw = (name || '').trim();
+      return raw ? raw + ' (You)' : '(You)';
+    }
+
+    // ===== Computed seat positions (percentage-based for responsive layout) =====
+    function computeSeats(n) {
+      const seats = [];
+      for (let i = 0; i < n; i++) {
+        const angle = (3 * Math.PI / 2) + (2 * Math.PI * i / n);
+        const x = 50 + 46 * Math.cos(angle);
+        const y = 50 + 42 * Math.sin(angle);
+        seats.push({ t: y + '%', l: x + '%' });
+      }
+      return seats;
+    }
+
+    // ===== Sound =====
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+    function beep(f,d,v=0.08,t='sine') {
+      try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
+    }
+    function sf() { beep(200,0.15,0.06,'sawtooth'); }
+    function sch() { beep(600,0.08,0.05); }
+    function sca() { beep(440,0.1,0.06); }
+    function sbet() { beep(330,0.12,0.07,'triangle'); }
+    function sra() { beep(550,0.1,0.07,'square'); setTimeout(()=>beep(660,0.1,0.05,'square'),80); }
+    function swin() { beep(523,0.15); setTimeout(()=>beep(659,0.15),150); setTimeout(()=>beep(784,0.2),300); }
+    function slose() { beep(400,0.2,0.06,'sawtooth'); setTimeout(()=>beep(300,0.25,0.06,'sawtooth'),200); }
+    function sbotTurn() { beep(350,0.06,0.03,'triangle'); setTimeout(()=>beep(400,0.06,0.03,'triangle'),80); }
+
+    // ===== Card Rendering =====
+    function cHTML(c) {
+      if (!c || c.rank===0) return '<div class="card card-b"><div class="cbp"></div></div>';
+      const r=RD[c.rank]||c.rank, s=SS[c.suit]||c.suit, cl=SC[c.suit]||'#1a1a2e';
+      return '<div class="card card-f" style="color:'+cl+'"><div class="crt">'+r+'</div><div class="csc">'+s+'</div><div class="crb">'+r+'</div></div>';
+    }
+    function csHTML(c,fd) {
+      if (fd||!c||c.rank===0) return '<span class="cs csb"></span>';
+      const r=RD[c.rank]||c.rank, s=SS[c.suit]||c.suit, cl=SC[c.suit]||'#1a1a2e';
+      return '<span class="cs" style="color:'+cl+'">'+r+s+'</span>';
+    }
+
+    // ===== Action Popup =====
+    function showActionPopup(playerId, action, amount) {
+      const area = document.getElementById('action-popup-area');
+      const el = document.createElement('div');
+      el.className = 'action-popup';
+      const actUpper = action.charAt(0).toUpperCase() + action.slice(1);
+      const amtStr = amount > 0 ? ' $' + amount : '';
+      el.textContent = playerId + ' ' + actUpper + amtStr;
+      area.appendChild(el);
+      // Trigger fade
+      requestAnimationFrame(() => { el.classList.add('show'); });
+      setTimeout(() => {
+        el.classList.remove('show');
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 500);
+      }, 2000);
+    }
+
+    // ===== Home Screen =====
+    // Difficulty boxes
+    document.querySelectorAll('.diff-box').forEach(box => {
+      box.addEventListener('click', () => {
+        document.querySelectorAll('.diff-box').forEach(b => b.classList.remove('selected'));
+        box.classList.add('selected');
+        document.getElementById('input-difficulty').value = box.dataset.diff;
+        // Update home screen background based on difficulty
+        const home = document.getElementById('home-screen');
+        home.setAttribute('data-diff', box.dataset.diff);
+      });
+    });
+    // Select Easy by default
+    document.querySelector('.diff-box[data-diff="easy"]').classList.add('selected');
+
+    document.getElementById('btn-show-settings').addEventListener('click',()=>{
+      document.getElementById('settings-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-settings-cancel').addEventListener('click',()=>{
+      document.getElementById('settings-modal').classList.add('hidden');
+    });
+    document.getElementById('btn-settings-ok').addEventListener('click',()=>{
+      settings.numPlayers=parseInt(document.getElementById('set-players').value);
+      settings.startingStack=parseInt(document.getElementById('set-stack').value);
+      settings.smallBlind=parseInt(document.getElementById('set-sb').value);
+      settings.bigBlind=parseInt(document.getElementById('set-bb').value);
+      settings.shotClockSeconds=parseInt(document.getElementById('set-shot-clock').value);
+      document.getElementById('settings-modal').classList.add('hidden');
+    });
+
+    // Bot customization sliders
+    document.getElementById('bc-bluff').addEventListener('input', function() {
+      document.getElementById('bc-bluff-val').textContent = this.value + '%';
+    });
+    document.getElementById('bc-fold3bet').addEventListener('input', function() {
+      document.getElementById('bc-fold3bet-val').textContent = this.value + '%';
+    });
+
+    document.getElementById('btn-home-start').addEventListener('click',()=>{
+      const difficulty = document.getElementById('input-difficulty').value;
+      settings.difficulty = difficulty;
+      playerName = document.getElementById('input-username').value.trim() || 'You';
+      document.getElementById('hm').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+      document.getElementById('hu').textContent = getDisplayName(playerName);
+      document.getElementById('home-screen').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('pre-hand-overlay').classList.remove('hidden');
+      socket.emit('updateSettings', { ...settings, playerName, difficulty });
+    });
+    document.getElementById('btn-start-hand').addEventListener('click',()=>{
+      // Send bot customization to server
+      const customization = {
+        personality: document.getElementById('bc-personality').value,
+        aggression: parseInt(document.getElementById('bc-aggression').value, 10),
+        bluffFreq: parseInt(document.getElementById('bc-bluff').value, 10) / 100,
+        foldTo3bet: parseInt(document.getElementById('bc-fold3bet').value, 10) / 100,
+      };
+      socket.emit('updateBotCustomization', customization);
+      document.getElementById('pre-hand-overlay').classList.add('hidden');
+      socket.emit('startGame');
+    });
+    document.getElementById('logo-link').addEventListener('click',(e)=>{
+      e.preventDefault();
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('stats-panel').classList.add('hidden');
+      document.getElementById('analyzer-modal').classList.add('hidden');
+      document.getElementById('pre-hand-overlay').classList.add('hidden');
+      document.getElementById('home-screen').classList.remove('hidden');
+    });
+    document.getElementById('btn-home-return').addEventListener('click',()=>{
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('stats-panel').classList.add('hidden');
+      document.getElementById('analyzer-modal').classList.add('hidden');
+      document.getElementById('pre-hand-overlay').classList.add('hidden');
+      document.getElementById('home-screen').classList.remove('hidden');
+    });
+
+    // ===== Stats Toggle =====
+    let statsOpen = false;
+    document.getElementById('btn-toggle-stats').addEventListener('click',()=>{
+      statsOpen=!statsOpen;
+      document.getElementById('stats-panel').classList.toggle('hidden');
+      if (statsOpen) drawBalanceGraph();
+    });
+    document.getElementById('btn-close-stats').addEventListener('click',()=>{
+      document.getElementById('stats-panel').classList.add('hidden'); statsOpen=false;
+    });
+    document.getElementById('toggle-reset').addEventListener('change',(e)=>{
+      socket.emit('setResetBalance',{reset:e.target.checked});
+    });
+
+    // ===== Analyzer =====
+    document.getElementById('btn-analyze-hand').addEventListener('click',()=>{
+      socket.emit('requestHandAnalysis');
+    });
+    document.getElementById('btn-close-analyzer').addEventListener('click',()=>{
+      document.getElementById('analyzer-modal').classList.add('hidden');
+    });
+
+    socket.on('handAnalysis', (data) => {
+      document.getElementById('analyzer-modal').classList.remove('hidden');
+      renderHandAnalysis(data);
+    });
+
+    function renderHandAnalysis(data) {
+      if (!data) return;
+      const hole = data.holeCards || [];
+      const board = data.board || [];
+      document.getElementById('aa-hand').textContent = hole.map(c => RD[c.rank] + SS[c.suit]).join(' ') || '—';
+      document.getElementById('aa-board').textContent = board.length > 0 ? board.map(c => RD[c.rank] + SS[c.suit]).join(' ') : '—';
+
+      // Compute best hand
+      const allCards = [...hole, ...board];
+      if (allCards.length >= 5) {
+        const best = bestHand(allCards);
+        document.getElementById('aa-best').textContent = describeScore(best.score);
+      } else {
+        document.getElementById('aa-best').textContent = '—';
+      }
+
+      // Equity estimates at each street
+      document.getElementById('aa-eq-pre').textContent = (estimateEquity(hole, []) * 100).toFixed(1) + '%';
+      document.getElementById('aa-eq-flop').textContent = board.length >= 3 ? (estimateEquity(hole, board.slice(0,3)) * 100).toFixed(1) + '%' : '—';
+      document.getElementById('aa-eq-turn').textContent = board.length >= 4 ? (estimateEquity(hole, board.slice(0,4)) * 100).toFixed(1) + '%' : '—';
+      document.getElementById('aa-eq-river').textContent = board.length >= 5 ? (estimateEquity(hole, board) * 100).toFixed(1) + '%' : '—';
+
+      // Pot odds
+      const totalPot = data.pots ? data.pots.reduce((s,p) => s + p.amount, 0) : 0;
+      const youContributed = data.totalContributed && data.totalContributed['You'] ? data.totalContributed['You'] : 0;
+      const youWon = data.payouts && data.payouts['You'] ? data.payouts['You'] : 0;
+      document.getElementById('aa-pot-odds').textContent = totalPot > 0 ? (youContributed / totalPot * 100).toFixed(1) + '%' : '—';
+
+      // Recommendation and analysis
+      const youNet = youWon - youContributed;
+      document.getElementById('aa-ev').textContent = (youNet >= 0 ? '+' : '') + '$' + youNet;
+      document.getElementById('aa-mistake').textContent = youNet < 0 ? '⚠️ Possible mistake' : '✅ Well played';
+      document.getElementById('aa-mistake').style.color = youNet < 0 ? '#ef5350' : '#4caf50';
+      document.getElementById('aa-recommend').textContent = youWon > 0 ? 'Continue playing' : 'Consider folding earlier';
+      document.getElementById('aa-your-action').textContent = youWon > 0 ? 'Aggressive (profitable)' : 'Passive (lost pot)';
+
+      // Replay timeline
+      const stepsEl = document.getElementById('analyzer-replay-steps');
+      stepsEl.innerHTML = '';
+      if (data.handHistory) {
+        data.handHistory.forEach((line, i) => {
+          const step = document.createElement('div');
+          step.className = 'replay-step';
+          step.textContent = line;
+          stepsEl.appendChild(step);
+        });
+      }
+    }
+
+    // Simple client-side hand evaluation for analysis
+    function evaluate5(cards) {
+      if (cards.length !== 5) return [0, 0, 0, 0, 0];
+      const ranksDesc = cards.map(c => c.rank).sort((a,b) => b - a);
+      const suits = cards.map(c => c.suit);
+      const isFlush = suits.every(s => s === suits[0]);
+      const counts = new Map();
+      for (const r of ranksDesc) counts.set(r, (counts.get(r) || 0) + 1);
+      const groups = [...counts.entries()].sort((a,b) => b[1] - a[1] || b[0] - a[0]);
+      const uniqueRanksDesc = [...new Set(ranksDesc)];
+      let isStraight = false, straightHigh = 0;
+      if (uniqueRanksDesc.length === 5) {
+        if (uniqueRanksDesc[0] - uniqueRanksDesc[4] === 4) { isStraight = true; straightHigh = uniqueRanksDesc[0]; }
+        else if (uniqueRanksDesc.join(',') === '14,5,4,3,2') { isStraight = true; straightHigh = 5; }
+      }
+      if (isStraight && isFlush) return [8, straightHigh];
+      if (groups[0][1] === 4) return [7, groups[0][0], groups[1][0]];
+      if (groups[0][1] === 3 && groups[1][1] === 2) return [6, groups[0][0], groups[1][0]];
+      if (isFlush) return [5, ...ranksDesc];
+      if (isStraight) return [4, straightHigh];
+      if (groups[0][1] === 3) { const k = groups.slice(1).map(g => g[0]).sort((a,b) => b - a); return [3, groups[0][0], ...k]; }
+      if (groups[0][1] === 2 && groups[1][1] === 2) { const p = [groups[0][0], groups[1][0]].sort((a,b) => b - a); return [2, p[0], p[1], groups[2][0]]; }
+      if (groups[0][1] === 2) { const k = groups.slice(1).map(g => g[0]).sort((a,b) => b - a); return [1, groups[0][0], ...k]; }
+      return [0, ...ranksDesc];
+    }
+
+    function bestHand(cards) {
+      const combos = combinations(cards, 5);
+      let best = null;
+      for (const combo of combos) {
+        const score = evaluate5(combo);
+        if (!best || compareScores(score, best.score) > 0) best = { score, cards: combo };
+      }
+      return best;
+    }
+
+    function combinations(arr, k) {
+      const results = [];
+      function helper(start, combo) { if (combo.length === k) { results.push([...combo]); return; } for (let i = start; i < arr.length; i++) { combo.push(arr[i]); helper(i + 1, combo); combo.pop(); } }
+      helper(0, []);
+      return results;
+    }
+
+    function compareScores(a, b) {
+      const len = Math.max(a.length, b.length);
+      for (let i = 0; i < len; i++) { const diff = (a[i] || 0) - (b[i] || 0); if (diff !== 0) return diff; }
+      return 0;
+    }
+
+    function describeScore(score) {
+      const names = ['High Card', 'One Pair', 'Two Pair', 'Three of a Kind', 'Straight', 'Flush', 'Full House', 'Four of a Kind', 'Straight Flush'];
+      return names[score[0]] || 'Unknown';
+    }
+
+    function estimateEquity(hole, board) {
+      if (board.length === 0) {
+        const [c1, c2] = hole;
+        if (!c1 || !c2) return 0.08;
+        const pair = c1.rank === c2.rank;
+        const suited = c1.suit === c2.suit;
+        const high = Math.max(c1.rank, c2.rank);
+        let eq = 0.08;
+        if (pair) eq += c1.rank * 0.02;
+        if (high >= 14) eq += 0.08;
+        if (high >= 13) eq += 0.05;
+        if (high >= 12) eq += 0.03;
+        if (suited) eq += 0.02;
+        return Math.min(Math.max(eq, 0.02), 0.85);
+      }
+      const all = [...hole, ...board];
+      if (all.length < 5) return 0.2;
+      const best = bestHand(all);
+      const cat = best.score[0];
+      const eq = [0.15, 0.4, 0.55, 0.65, 0.7, 0.75, 0.85, 0.9, 0.95];
+      return eq[cat] || 0.15;
+    }
+
+    // ===== Timer =====
+    function stopTimer() {
+      if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+      document.getElementById('timer-container').classList.remove('active');
+    }
+    function startTimer(seconds) {
+      stopTimer();
+      if (seconds <= 0) return;
+      timerTotal = seconds; timerRemaining = seconds;
+      const container = document.getElementById('timer-container');
+      const fill = document.getElementById('timer-bar-fill');
+      const text = document.getElementById('timer-text');
+      container.classList.add('active');
+      fill.className = ''; fill.style.width = '100%'; text.textContent = seconds + 's';
+      timerInterval = setInterval(() => {
+        timerRemaining--;
+        if (timerRemaining <= 0) { timerRemaining = 0; stopTimer(); sf(); socket.emit('playerAction', { action: 'fold' }); return; }
+        const pct = (timerRemaining / timerTotal) * 100;
+        fill.style.width = pct + '%'; text.textContent = timerRemaining + 's';
+        if (pct <= 20) fill.className = 'danger'; else if (pct <= 40) fill.className = 'warning'; else fill.className = '';
+      }, 1000);
+    }
+
+    // ===== Balance Graph =====
+    function drawBalanceGraph() {
+      const canvas = document.getElementById('balance-graph');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      if (balanceHistory.length < 2) {
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.font = '10px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Insufficient data', w/2, h/2);
+        return;
+      }
+      const values = balanceHistory.map(b => b.balance);
+      const min = Math.min(...values) * 0.95;
+      const max = Math.max(...values) * 1.05;
+      const range = max - min || 1;
+      const pad = 10;
+
+      // Draw grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < 4; i++) {
+        const y = pad + (h - 2*pad) * i / 3;
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
+      }
+
+      // Draw line
+      ctx.beginPath();
+      ctx.strokeStyle = '#c9a84c';
+      ctx.lineWidth = 2;
+      values.forEach((v, i) => {
+        const x = pad + (w - 2*pad) * i / (values.length - 1);
+        const y = pad + (h - 2*pad) * (1 - (v - min) / range);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Fill area under line
+      const lastX = pad + (w - 2*pad) * (values.length - 1) / (values.length - 1);
+      const lastY = pad + (h - 2*pad) * (1 - (values[values.length-1] - min) / range);
+      ctx.lineTo(lastX, h - pad); ctx.lineTo(pad, h - pad); ctx.closePath();
+      const grad = ctx.createLinearGradient(0, pad, 0, h - pad);
+      grad.addColorStop(0, 'rgba(201,168,76,0.2)');
+      grad.addColorStop(1, 'rgba(201,168,76,0.01)');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Current value label
+      ctx.fillStyle = '#c9a84c';
+      ctx.font = 'bold 9px IBM Plex Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('$' + values[values.length-1], w - pad, pad + 10);
+    }
+
+    // ===== Game Update =====
+    let prevHandCount = 0;
+    function updateGameState(state) {
+      if (!state || !state.gameStarted) return;
+      const isYou = p => p.type === 'human' || p.id === 'You' || p.id === playerName;
+
+      // Track last actions for popups
+      if (state.lastActions) {
+        const prevActions = window._prevLastActions || {};
+        for (const [pid, act] of Object.entries(state.lastActions)) {
+          if (!prevActions[pid] || prevActions[pid].action !== act.action || prevActions[pid].amount !== act.amount) {
+            showActionPopup(pid, act.action, act.amount);
+          }
+        }
+        window._prevLastActions = state.lastActions;
+      }
+
+      // Update balance history only when hand completes (handCount changes)
+      if (state.balanceHistory && state.handCount !== prevHandCount) {
+        prevHandCount = state.handCount;
+        balanceHistory = state.balanceHistory;
+        if (statsOpen) drawBalanceGraph();
+      }
+
+      document.getElementById('h-counter').textContent = 'Hand #' + (state.handCount||0);
+      document.getElementById('h-street').textContent = state.street ? state.street.charAt(0).toUpperCase() + state.street.slice(1) : '—';
+      document.getElementById('h-pot').textContent = 'Pot $' + state.pot;
+      document.getElementById('h-blinds').textContent = (state.smallBlind||10) + '/' + (state.bigBlind||20);
+      document.getElementById('pot-value').textContent = '$' + state.pot;
+
+      // Board
+      document.querySelectorAll('.bc').forEach((el, i) => {
+        const card = state.board && state.board[i] ? state.board[i] : null;
+        if (card) { el.className = 'bc'; el.innerHTML = cHTML(card); }
+        else { el.className = 'bc empty'; el.innerHTML = ''; }
+      });
+
+      // Turn indicator (now in left panel)
+      const turnEl = document.getElementById('turn-indicator');
+      if (state.complete) { turnEl.textContent = 'Hand Complete'; turnEl.className = ''; }
+      else if (state.actingId) {
+        const actingPlayer = state.players.find(p => p.id === state.actingId);
+        const actingName = actingPlayer && isYou(actingPlayer) ? 'Your Turn' : state.actingId + "'s Turn";
+        turnEl.textContent = actingName + '...';
+        turnEl.className = 'active-turn';
+      } else { turnEl.textContent = 'Waiting...'; turnEl.className = ''; }
+
+      // Seats
+      const n = state.players.length;
+      const positions = computeSeats(n);
+      const container = document.getElementById('seats-container');
+      container.innerHTML = '';
+      const orderedPlayers = [...state.players].sort((a,b) => (a.seat||0) - (b.seat||0));
+      const lastActions = state.lastActions || {};
+      orderedPlayers.forEach(p => {
+        const seatIndex = Number.isInteger(p.seat) ? p.seat % n : 0;
+        const pos = positions[seatIndex] || { t:'50%', l:'50%' };
+        const you = isYou(p);
+        const displayName = you ? getDisplayName(playerName) : p.id;
+        const colorClass = p.colorClass || 'color-0';
+        const el = document.createElement('div');
+        const isActive = p.active && !state.complete;
+        el.className = 'seat ' + (p.active ? 'active' : '') + ' ' + (p.folded ? 'folded' : '') + ' ' + (you ? 'you' : '') + ' ' + colorClass;
+        el.style.top = pos.t;
+        el.style.left = pos.l;
+        const isSB = state.smallBlind && p.contributed === state.smallBlind;
+        const isBB = state.bigBlind && p.contributed === state.bigBlind;
+        let badge = '';
+        if (isSB) badge = '<span class="badge sbb">SB</span>';
+        else if (isBB) badge = '<span class="badge bbb">BB</span>';
+        const cards = (p.holeCards||[]).map(c => csHTML(c, !you && !state.complete)).join(' ');
+        const lastAct = lastActions[p.id];
+        let lastActHTML = '';
+        if (lastAct && !state.complete) {
+          const actStr = lastAct.action === 'fold' ? 'F' : lastAct.action === 'check' ? 'X' : lastAct.action === 'call' ? 'C' : lastAct.action === 'bet' ? 'B' : lastAct.action === 'raise' ? 'R' : '';
+          const amtStr = lastAct.amount > 0 ? ' $' + lastAct.amount : '';
+          lastActHTML = '<div class="la">' + actStr + amtStr + '</div>';
+        }
+        // Floating chip for active player
+        const chipHTML = isActive ? '<div class="turn-chip"></div>' : '';
+        el.innerHTML = chipHTML + '<div class="sh"><span class="sn">' + displayName + '</span>' + badge + '</div><div class="sc">' + cards + '</div><div class="ss">$' + p.stack + '</div><div class="sbet ' + (p.contributed ? 'has' : '') + '">' + (p.contributed > 0 ? '$' + p.contributed : '') + '</div>' + (p.folded ? '<div class="sf">FOLD</div>' : '') + lastActHTML;
+        container.appendChild(el);
+      });
+
+      // Player's cards
+      const you = state.players.find(p => isYou(p));
+      if (you) {
+        const hc = you.holeCards || [];
+        document.querySelectorAll('.pc').forEach((el, i) => { el.innerHTML = hc[i] ? cHTML(hc[i]) : cHTML(null); });
+        document.getElementById('player-name-display').textContent = getDisplayName(playerName);
+        document.getElementById('player-stack-display').textContent = '$' + you.stack;
+        // Update chip stack visual
+        updateChipStack(you.stack);
+      }
+
+      // Actions
+      const bar = document.getElementById('action-bar');
+      const betArea = document.getElementById('bet-area');
+      const showActions = !!state.legalActions && !state.complete;
+      if (showActions) {
+        bar.classList.remove('hidden');
+        bar.style.display = 'flex';
+      } else {
+        bar.classList.add('hidden');
+        bar.style.display = 'none';
+      }
+      if (showActions) {
+        if (settings.shotClockSeconds > 0) startTimer(settings.shotClockSeconds);
+        else stopTimer();
+      } else { stopTimer(); }
+      if (!showActions) { betArea.classList.add('hidden'); }
+      else {
+        const leg = state.legalActions;
+        document.getElementById('btn-fold').style.display = leg.fold ? '' : 'none';
+        document.getElementById('btn-check').style.display = leg.check ? '' : 'none';
+        const cb = document.getElementById('btn-call');
+        if (leg.call) { cb.style.display = ''; cb.textContent = 'Call $' + leg.callAmount; } else cb.style.display = 'none';
+        const canBetOrRaise = leg.bet || leg.raise;
+        if (canBetOrRaise) {
+          betArea.classList.remove('hidden');
+          betArea.style.display = 'flex';
+        } else {
+          betArea.classList.add('hidden');
+          betArea.style.display = 'none';
+        }
+        if (canBetOrRaise) {
+          const slider = document.getElementById('bet-slider');
+          const inp = document.getElementById('bet-amount');
+          const minV = leg.minRaiseTo || 20, maxV = leg.maxRaiseTo || 1000;
+          slider.min = minV; slider.max = maxV; slider.value = minV;
+          inp.value = String(minV);
+          inp.dataset.min = String(minV); inp.dataset.max = String(maxV);
+          slider.oninput = () => { inp.value = slider.value; };
+          inp.oninput = () => { slider.value = inp.value; };
+          document.getElementById('btn-bet').style.display = leg.bet ? '' : 'none';
+          document.getElementById('btn-raise').style.display = leg.raise ? '' : 'none';
+        }
+      }
+
+      // Results
+      const overlay = document.getElementById('result-overlay');
+      if (state.complete && state.results) {
+        overlay.classList.remove('hidden');
+        overlay.style.top = '45%'; overlay.style.left = '50%';
+        const payouts = state.results.payouts || {};
+        const winners = Object.entries(payouts).filter(([id, a]) => a > 0);
+        const youWon = winners.some(([id]) => isYou({id}));
+        if (youWon) { document.getElementById('result-title').textContent = 'YOU WIN!'; document.getElementById('result-title').style.color = '#4caf50'; }
+        else if (winners.length > 0) { document.getElementById('result-title').textContent = 'You lost this hand'; document.getElementById('result-title').style.color = '#ef5350'; }
+        else { document.getElementById('result-title').textContent = 'Hand Complete'; document.getElementById('result-title').style.color = '#c9a84c'; }
+        let html = '';
+        if (state.results.showdown) {
+          state.results.showdown.results.forEach(r => {
+            const won = payouts[r.id] && payouts[r.id] > 0;
+            const winSpan = won ? '<span class="sdw">+$' + payouts[r.id] + '</span>' : '';
+            html += '<div class="sd-row ' + (won ? 'win' : '') + '"><span>' + r.id + '</span><span class="sdh">' + (r.description || 'High Card') + '</span>' + winSpan + '</div>';
+          });
+        }
+        document.getElementById('result-details').innerHTML = html;
+        document.getElementById('toggle-reset').checked = state.resetBalanceEachHand || false;
+        if (youWon) swin(); else slose();
+      } else { overlay.classList.add('hidden'); }
+
+      // Pre-hand state
+      const preHandOverlay = document.getElementById('pre-hand-overlay');
+      if (state.gameStarted && state.handCount > 0 && !state.complete) { preHandOverlay.classList.add('hidden'); }
+
+      // History
+      const hl = document.getElementById('history-list');
+      const playerColors = { 'You': '#ffffff' };
+      state.players.forEach(p => {
+        const colorMap = { 'color-0': 'rgba(255,255,255,0.9)', 'color-1': '#4dd0e1', 'color-2': '#ffa726', 'color-3': '#ab47bc', 'color-4': '#66bb6a', 'color-5': '#ef5350' };
+        playerColors[p.id] = colorMap[p.colorClass] || 'rgba(255,255,255,0.6)';
+      });
+      hl.innerHTML = state.handHistory.map(l => {
+        let colored = l;
+        for (const [pid, color] of Object.entries(playerColors)) {
+          const re = new RegExp('\\b' + pid + '\\b', 'g');
+          colored = colored.replace(re, '<span style="color:' + color + ';font-weight:500">' + pid + '</span>');
+        }
+        return '<div class="h-line">' + colored + '</div>';
+      }).join('');
+      hl.scrollTop = hl.scrollHeight;
+
+      // Stats
+      renderStats(state);
+    }
+
+    function renderStats(state) {
+      if (!state.stats) return;
+      const s = state.stats;
+      const you = state.players.find(p => p.type === 'human' || p.id === 'You' || p.id === playerName);
+      setSV('st-hp', s.handsPlayed);
+      setSV('st-hw', s.handsWon);
+      setSV('st-wr', s.handsPlayed > 0 ? Math.round(s.handsWon / s.handsPlayed * 100) + '%' : '0%');
+      setSV('st-tw', '$' + s.totalWinnings);
+      setSV('st-bp', '$' + s.biggestPot);
+      setSV('st-cs', you ? '$' + you.stack : '$0');
+      const net = you ? you.stack - settings.startingStack : 0;
+      const npEl = document.getElementById('st-np');
+      npEl.textContent = net >= 0 ? '+$' + net : '-$' + Math.abs(net);
+      npEl.style.color = net >= 0 ? '#4caf50' : '#ef5350';
+      const roi = s.totalInvested > 0 ? ((net / s.totalInvested) * 100).toFixed(1) : '—';
+      document.getElementById('st-roi').textContent = roi !== '—' ? (net >= 0 ? '+' : '') + roi + '%' : '—';
+      document.getElementById('st-roi').style.color = s.totalInvested > 0 ? (net >= 0 ? '#4caf50' : '#ef5350') : 'rgba(255,255,255,0.4)';
+      document.getElementById('st-vp').textContent = s.totalActions > 0 ? Math.round(s.vpipActions / s.totalActions * 100) + '%' : '0%';
+      const af = s.totalFolds + s.totalCalls > 0 ? ((s.totalBets + s.totalRaises) / (s.totalCalls + s.totalFolds)).toFixed(2) : '—';
+      document.getElementById('st-af').textContent = af;
+      document.getElementById('st-fp').textContent = s.totalActions > 0 ? Math.round(s.totalFolds / s.totalActions * 100) + '%' : '0%';
+      document.getElementById('st-br').textContent = (s.totalBets + s.totalRaises);
+      document.getElementById('st-ca').textContent = s.totalCalls;
+      document.getElementById('st-ch').textContent = s.totalChecks;
+      const numP = state.players.length;
+      const avgEq = numP > 0 ? 1 / numP : 0.1667;
+      const totalEV = avgEq * s.handsPlayed * (settings.smallBlind * 6);
+      const evEl = document.getElementById('st-ev');
+      if (totalEV > 0 && s.totalActions > 0) {
+        evEl.textContent = '$' + totalEV.toFixed(1);
+        const cap = ((s.totalWinnings / totalEV) * 100).toFixed(1);
+        const capEl = document.getElementById('st-evcap');
+        capEl.textContent = cap + '%';
+        capEl.style.color = parseFloat(cap) >= 100 ? '#4caf50' : '#ef5350';
+      } else { evEl.textContent = '—'; document.getElementById('st-evcap').textContent = '—'; }
+    }
+
+    function setSV(id, v) { document.getElementById(id).textContent = v; }
+
+    // ===== Chip Stack Visual Update (Denominations) =====
+    function updateChipStack(balance) {
+      let container = document.getElementById('chip-stack-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'chip-stack-container';
+        container.className = 'chip-container';
+        document.getElementById('player-area').appendChild(container);
+      }
+      // Create chip stack based on denominations: $1000, $500, $100, $25, $10, $5
+      const chips = [];
+      let remaining = balance;
+      const addChips = (value, className, max) => {
+        const count = Math.min(Math.floor(remaining / value), max);
+        if (count > 0) {
+          for (let i = 0; i < count; i++) chips.push('<span class="chip-icon ' + className + '"></span>');
+          remaining -= count * value;
+        }
+      };
+      addChips(1000, 'chip-1000', 2);
+      addChips(500, 'chip-500', 3);
+      addChips(100, 'chip-100', 4);
+      addChips(25, 'chip-25', 3);
+      addChips(10, 'chip-10', 2);
+      addChips(5, 'chip-5', 2);
+      // Show max 5 chips
+      const display = chips.slice(0, 5);
+      container.innerHTML = '<div class="chip-stack-visual">' + display.reverse().join('') + '</div>';
+    }
+
+    // ===== Site Settings (Volume) =====
+    let currentVolume = 0.8;
+    document.getElementById('set-volume').addEventListener('input', function() {
+      currentVolume = this.value / 100;
+      document.getElementById('volume-val').textContent = this.value + '%';
+    });
+    // Override beep to respect volume
+    const origBeep = beep;
+    beep = function(f,d,v=0.08,t='sine') {
+      try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v*currentVolume; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
+    };
+
+    // ===== Pause/Resume Buttons =====
+    document.getElementById('btn-pause-game').addEventListener('click', () => {
+      socket.emit('pauseGame');
+    });
+    document.getElementById('btn-resume-game').addEventListener('click', () => {
+      socket.emit('resumeGame');
+    });
+
+    // ===== Site Settings Modal =====
+    document.getElementById('btn-volume-settings').addEventListener('click', () => {
+      document.getElementById('site-settings-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-site-settings-ok').addEventListener('click', () => {
+      document.getElementById('site-settings-modal').classList.add('hidden');
+    });
+
+    // ===== Socket Events =====
+    // ===== Socket Events =====
+
+    // ===== Socket Events =====
+    socket.on('gameState', updateGameState);
+    socket.on('botTurn', () => { sbotTurn(); });
+    socket.on('handComplete', (data) => {
+      const felt = document.getElementById('table-felt');
+      felt.classList.remove('ripple-win', 'ripple-lose');
+      void felt.offsetWidth;
+      felt.classList.add(data.youWon ? 'ripple-win' : 'ripple-lose');
+      setTimeout(() => felt.classList.remove('ripple-win', 'ripple-lose'), 2000);
+    });
+    socket.on('pauseGame', () => {
+      document.getElementById('pause-modal').classList.remove('hidden');
+    });
+    socket.on('resumeGame', () => {
+      document.getElementById('pause-modal').classList.add('hidden');
+    });
+
+    // ===== Actions =====
+    document.getElementById('btn-fold').addEventListener('click', () => { stopTimer(); sf(); socket.emit('playerAction', { action: 'fold' }); });
+    document.getElementById('btn-check').addEventListener('click', () => { stopTimer(); sch(); socket.emit('playerAction', { action: 'check' }); });
+    document.getElementById('btn-call').addEventListener('click', () => { stopTimer(); sca(); socket.emit('playerAction', { action: 'call' }); });
+    function doBetOrRaise(action) {
+      const inp = document.getElementById('bet-amount');
+      const val = parseInt(inp.value, 10);
+      const minV = parseInt(inp.dataset.min, 10);
+      const maxV = parseInt(inp.dataset.max, 10);
+      if (isNaN(val) || val < minV || val > maxV) { alert('Invalid amount: must be between $' + minV + ' and $' + maxV); return; }
+      stopTimer();
+      if (action === 'bet') sbet(); else sra();
+      socket.emit('playerAction', { action, amount: val });
+    }
+    document.getElementById('btn-bet').addEventListener('click', () => { doBetOrRaise('bet'); });
+    document.getElementById('btn-raise').addEventListener('click', () => { doBetOrRaise('raise'); });
+    document.getElementById('btn-next-hand').addEventListener('click', () => { stopTimer(); socket.emit('nextHand'); });
+  </script>
+</body>
+</html>

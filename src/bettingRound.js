@@ -11,7 +11,7 @@
 // raises) but fine for an MVP - worth revisiting before calling betting
 // "rules-complete."
 export class BettingRound {
-  constructor({ players, actingIndex = 0, minRaise, currentBet = 0 }) {
+  constructor({ players, actingIndex = 0, minRaise, currentBet = 0, numPlayersAtStart = players.length }) {
     // players: [{ id, stack, contributed }] - contributed is optional and
     // lets a caller pre-post forced bets (blinds) before betting starts;
     // it defaults to 0, so existing callers are unaffected.

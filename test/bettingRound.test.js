@@ -92,3 +92,25 @@ test("cannot act out of turn", () => {
   round.applyAction("a", "bet", 10);
   assert.throws(() => round.applyAction("a", "raise", 20), /not a's turn/);
 });
+
+test("raiseCount increments on bet/raise only, not on check/call/fold", () => {
+  const round = makeRound({ a: 100, b: 100, c: 100 }, 2);
+  assert.equal(round.raiseCount, 0);
+  round.applyAction("a", "bet", 10); // 1st aggressive action ("open")
+  assert.equal(round.raiseCount, 1);
+  round.applyAction("b", "call");
+  assert.equal(round.raiseCount, 1, "call should not count as a raise");
+  round.applyAction("c", "raise", 30); // "3-bet"
+  assert.equal(round.raiseCount, 2);
+  round.applyAction("a", "fold");
+  assert.equal(round.raiseCount, 2, "fold should not count as a raise");
+  round.applyAction("b", "raise", 80); // "4-bet"
+  assert.equal(round.raiseCount, 3);
+});
+
+test("raiseCount does not increment on check-only streets", () => {
+  const round = makeRound({ a: 100, b: 100 });
+  round.applyAction("a", "check");
+  round.applyAction("b", "check");
+  assert.equal(round.raiseCount, 0);
+});

@@ -95,28 +95,30 @@ body::before {
 
 #home-content {
   text-align: center;
-  padding: 60px 40px 40px;
-  max-width: 420px;
-  width: 90%;
+  padding: 26px 40px 30px;
+  max-width: 780px;
+  width: 92%;
+  max-height: 96vh;
+  overflow-y: auto;
   position: relative;
   z-index: 1
 }
 
 #home-deco {
-  font-size: 3rem;
+  font-size: 2.1rem;
   letter-spacing: 15px;
   color: rgba(255, 255, 255, 0.06);
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   font-weight: 300
 }
 
 #home-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 3.2rem;
+  font-size: 2.6rem;
   font-weight: 700;
   color: #e8e4dc;
   letter-spacing: 0.5px;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
   text-shadow: 0 0 30px rgba(201, 168, 76, 0.1)
 }
 
@@ -125,21 +127,36 @@ body::before {
   color: rgba(255, 255, 255, 0.2);
   letter-spacing: 2px;
   font-weight: 300;
-  margin-bottom: 32px;
+  margin-bottom: 14px;
   font-style: italic
 }
 
 #home-subtitle {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.25);
-  margin-bottom: 28px
+  margin-bottom: 14px
 }
 
-#home-form {
+#home-top-row {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 20px
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 14px;
+  text-align: left
+}
+
+#username-fg {
+  flex: 1
+}
+
+#difficulty-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.3);
+  font-weight: 500;
+  margin-bottom: 10px;
+  text-align: left
 }
 
 .fg {
@@ -221,11 +238,13 @@ body::before {
 #home-config-row {
   display: flex;
   gap: 8px;
-  width: 100%
+  flex-shrink: 0
 }
 
 #home-config-row .config-btn {
-  flex: 1
+  width: auto;
+  padding: 10px 16px;
+  white-space: nowrap
 }
 
 .icon-btn {
@@ -260,24 +279,41 @@ body::before {
 
 /* ===== Difficulty Boxes ===== */
 #difficulty-boxes {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  width: 100%
+  width: 100%;
+  margin-bottom: 14px
 }
 
 .diff-box {
-  padding: 16px 14px;
-  border-radius: 10px;
+  padding: 12px 24px;
+  border-radius: 14px;
   border: 3px solid #000;
-  text-align: center;
-  font-size: 0.9rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
+  text-align: left;
   cursor: pointer;
   transition: all 0.25s;
-  position: relative
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px
+}
+
+.diff-box-name {
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px
+}
+
+.diff-box-desc {
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  line-height: 1.4;
+  color: inherit;
+  opacity: 0.85;
+  max-width: 640px
 }
 
 .diff-box:hover {
@@ -588,7 +624,8 @@ body::before {
 #app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
   position: relative;
   z-index: 1
 }
@@ -830,7 +867,8 @@ body::before {
 #main-layout {
   display: flex;
   flex: 1;
-  min-height: 0
+  min-height: 0;
+  overflow: hidden
 }
 
 /* ===== Left Panel ===== */
@@ -841,7 +879,8 @@ body::before {
   display: flex;
   flex-direction: column;
   background: rgba(0, 0, 0, 0.2);
-  max-height: 100vh;
+  height: 100%;
+  min-height: 0;
   overflow: hidden
 }
 
@@ -881,6 +920,7 @@ body::before {
   display: flex;
   flex-direction: column;
   flex: 1;
+  min-height: 0;
   padding: 4px 12px 10px;
   overflow: hidden
 }
@@ -897,11 +937,27 @@ body::before {
 
 #history-list {
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  max-height: calc(100vh - 120px)
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent
+}
+
+#history-list::-webkit-scrollbar {
+  width: 6px
+}
+
+#history-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px
+}
+
+#history-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25)
 }
 
 .h-line {
@@ -922,9 +978,17 @@ body::before {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 0 16px;
+  padding: 30px 16px 0;
   min-width: 0;
-  margin-top: 0
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin-top: 0;
+  background-image:
+    radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.02) 0%, transparent 45%),
+    repeating-linear-gradient(0deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
+    repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.25'/%3E%3C/svg%3E")
 }
 
 /* ===== Table Wrapper ===== */
@@ -933,6 +997,27 @@ body::before {
   width: 1100px;
   height: 520px;
   flex-shrink: 0
+}
+
+/* Textured rail behind the felt so the surrounding black space isn't flat */
+#table-wrapper::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 960px;
+  height: 600px;
+  border-radius: 340px / 220px;
+  background-image:
+    radial-gradient(ellipse at 28% 25%, rgba(120, 82, 32, 0.16) 0%, transparent 55%),
+    radial-gradient(ellipse at 76% 78%, rgba(20, 24, 36, 0.5) 0%, transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.015) 0px, rgba(255, 255, 255, 0.015) 1px, transparent 1px, transparent 7px),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/%3E%3C/svg%3E"),
+    linear-gradient(160deg, #1a1108 0%, #0c0805 45%, #050403 100%);
+  box-shadow: inset 0 0 140px rgba(0, 0, 0, 0.85), 0 0 100px rgba(0, 0, 0, 0.55);
+  z-index: 1;
+  pointer-events: none
 }
 
 /* ===== Table Felt ===== */
@@ -1664,6 +1749,15 @@ body::before {
   z-index: 10
 }
 
+#hotkey-hint {
+  text-align: center;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  font-family: 'IBM Plex Mono', monospace
+}
+
 .act-btn {
   padding: 10px 28px;
   border: none;
@@ -2008,6 +2102,83 @@ body::before {
   border-bottom: 1px solid rgba(255, 255, 255, 0.02)
 }
 
+#analyzer-street-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px
+}
+
+.street-tab {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.15s
+}
+
+.street-tab:hover {
+  border-color: rgba(201, 168, 76, 0.3);
+  color: rgba(255, 255, 255, 0.7)
+}
+
+.street-tab.active {
+  background: #c9a84c;
+  border-color: #c9a84c;
+  color: #0d0d1a
+}
+
+#analyzer-street-board {
+  display: flex;
+  gap: 6px;
+  min-height: 56px;
+  align-items: center;
+  padding: 8px 0
+}
+
+#analyzer-street-board .card {
+  width: 40px;
+  height: 56px;
+  flex-shrink: 0
+}
+
+#analyzer-street-board .crt,
+#analyzer-street-board .crb {
+  font-size: 7px
+}
+
+#analyzer-street-board .csc {
+  font-size: 13px
+}
+
+.street-board-empty {
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.25);
+  font-style: italic
+}
+
+#analyzer-street-info {
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 6px 0;
+  margin-bottom: 8px
+}
+
+#analyzer-street-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 120px;
+  overflow-y: auto
+}
+
 #analyzer-stats {
   display: flex;
   flex-direction: column;
@@ -2101,6 +2272,42 @@ body::before {
   gap: 16px
 }
 
+#stats-graph-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between
+}
+
+#graph-legend {
+  display: flex;
+  gap: 10px
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: none;
+  font-weight: 400
+}
+
+.legend-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block
+}
+
+.legend-dot-actual {
+  background: #c9a84c
+}
+
+.legend-dot-ev {
+  background: #4dd0e1
+}
+
 .st-sec {
   display: flex;
   flex-direction: column;
@@ -2122,6 +2329,17 @@ body::before {
   align-items: center;
   padding: 3px 0;
   font-size: 0.75rem
+}
+
+#stats-export-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px
+}
+
+#stats-export-row .sec-btn {
+  font-size: 0.65rem;
+  padding: 8px 10px
 }
 
 .sl {
@@ -2437,4 +2655,175 @@ body::before {
   padding: 2px 6px;
   border-radius: 8px;
   margin-top: 2px
+}
+/* ===== Range Trainer Modal ===== */
+#trainer-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 150;
+  backdrop-filter: blur(6px)
+}
+
+#trainer-content {
+  background: #111;
+  border: 1px solid rgba(201, 168, 76, 0.15);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 460px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6)
+}
+
+#trainer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04)
+}
+
+#trainer-head span {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #c9a84c;
+  font-weight: 600
+}
+
+#btn-close-trainer {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.15);
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 4px
+}
+
+#btn-close-trainer:hover {
+  color: rgba(255, 255, 255, 0.4)
+}
+
+#trainer-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  overflow-y: auto;
+  flex: 1;
+  align-items: center;
+  text-align: center
+}
+
+#trainer-disclaimer {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  align-self: stretch
+}
+
+#trainer-stats {
+  display: flex;
+  gap: 16px;
+  align-self: stretch;
+  justify-content: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  padding-bottom: 10px
+}
+
+#trainer-stats .arow {
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: none;
+  align-items: center;
+  padding: 0
+}
+
+#trainer-scenario {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+#trainer-hand {
+  display: flex;
+  gap: 8px;
+  min-height: 84px;
+  align-items: center;
+  justify-content: center
+}
+
+#trainer-hand .card {
+  width: 56px;
+  height: 78px
+}
+
+#trainer-actions {
+  display: flex;
+  gap: 10px;
+  align-self: stretch
+}
+
+#trainer-actions .act-btn {
+  flex: 1;
+  padding: 10px 0
+}
+
+#trainer-feedback {
+  align-self: stretch;
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 0.75rem;
+  line-height: 1.5
+}
+
+#trainer-feedback.correct {
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  color: #8fd694
+}
+
+#trainer-feedback.incorrect {
+  border: 1px solid rgba(239, 83, 80, 0.3);
+  color: #f29e9c
+}
+
+#trainer-feedback .tf-verdict {
+  font-weight: 700;
+  display: block;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.7rem
+}
+
+#btn-trainer-next {
+  align-self: stretch;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  background: #c9a84c;
+  color: #0d0d1a;
+  cursor: pointer;
+  text-transform: uppercase
+}
+
+#btn-trainer-next:hover {
+  background: #dbb856
 }

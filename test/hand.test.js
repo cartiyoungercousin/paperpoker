@@ -125,3 +125,119 @@ test("3-handed: correct blind assignment and preflop action order", () => {
 
   assert.equal(hand.currentStreetName(), "flop");
 });
+
+test("allInSnapshot captures the (empty) board and hole cards at a preflop all-in", () => {
+  const deck = fixedDeck([
+    c(14, "h"), c(14, "s"), // alice: Ah As
+    c(2, "c"), c(3, "d"), // bob: 2c 3d
+    c(1, "s"), // burn
+    c(9, "s"), c(7, "d"), c(4, "c"), // flop
+    c(1, "d"), // burn
+    c(10, "h"), // turn
+    c(1, "c"), // burn
+    c(6, "s"), // river
+  ]);
+
+  const hand = new Hand({
+    players: [
+      { id: "alice", stack: 50 },
+      { id: "bob", stack: 50 },
+    ],
+    minRaise: 2,
+    smallBlind: 1,
+    bigBlind: 2,
+    dealerIndex: 0, // heads-up: alice is SB/dealer, acts first
+    deck,
+  });
+
+  assert.equal(hand.allInSnapshot, null);
+  hand.applyAction("alice", "raise", 50); // shoves the rest of her stack
+  hand.applyAction("bob", "call"); // calls all-in - both stacks now 0
+
+  assert.ok(hand.allInSnapshot, "everyone live in the hand is all-in preflop");
+  assert.deepEqual(hand.allInSnapshot.boardAtAllIn, []);
+  assert.equal(hand.allInSnapshot.participants.length, 2);
+  const aliceEntry = hand.allInSnapshot.participants.find((p) => p.id === "alice");
+  assert.deepEqual(aliceEntry.holeCards, [c(14, "h"), c(14, "s")]);
+
+  assert.ok(hand.complete);
+  assert.equal(hand.board.length, 5, "the rest of the board should still get dealt out");
+});
+
+test("allInSnapshot captures the 3-card board at a flop-stage all-in", () => {
+  const deck = fixedDeck([
+    c(14, "h"), c(14, "s"), // alice
+    c(2, "c"), c(3, "d"), // bob
+    c(1, "s"), // burn
+    c(9, "s"), c(7, "d"), c(4, "c"), // flop
+    c(1, "d"), // burn
+    c(10, "h"), // turn
+    c(1, "c"), // burn
+    c(6, "s"), // river
+  ]);
+
+  const hand = new Hand({
+    players: [
+      { id: "alice", stack: 100 },
+      { id: "bob", stack: 100 },
+    ],
+    minRaise: 2,
+    smallBlind: 1,
+    bigBlind: 2,
+    dealerIndex: 0,
+    deck,
+  });
+
+  hand.applyAction("alice", "call"); // completes SB to match BB
+  hand.applyAction("bob", "check"); // BB option closes preflop
+
+  assert.equal(hand.currentStreetName(), "flop");
+  assert.equal(hand.allInSnapshot, null);
+
+  hand.applyAction("alice", "bet", 98); // shoves the rest of her stack
+  hand.applyAction("bob", "call"); // calls all-in
+
+  assert.ok(hand.allInSnapshot);
+  assert.deepEqual(hand.allInSnapshot.boardAtAllIn, [c(9, "s"), c(7, "d"), c(4, "c")]);
+});
+
+test("allInSnapshot stays null for a hand where no one goes all-in", () => {
+  const deck = fixedDeck([
+    c(14, "h"), c(13, "h"),
+    c(2, "c"), c(3, "d"),
+    c(1, "s"),
+    c(9, "s"), c(7, "d"), c(4, "c"),
+    c(1, "d"),
+    c(10, "h"),
+    c(1, "c"),
+    c(6, "s"),
+  ]);
+  const hand = new Hand({
+    players: [{ id: "alice", stack: 100 }, { id: "bob", stack: 100 }],
+    minRaise: 2, smallBlind: 1, bigBlind: 2, dealerIndex: 0, deck,
+  });
+  hand.applyAction("alice", "call");
+  hand.applyAction("bob", "check");
+  hand.applyAction("alice", "check");
+  hand.applyAction("bob", "check");
+  hand.applyAction("alice", "check");
+  hand.applyAction("bob", "check");
+  hand.applyAction("alice", "check");
+  hand.applyAction("bob", "check");
+
+  assert.ok(hand.complete);
+  assert.equal(hand.allInSnapshot, null);
+});
+
+test("allInSnapshot stays null when the hand ends by everyone folding", () => {
+  const deck = fixedDeck([c(2, "h"), c(3, "h"), c(9, "c"), c(9, "d")]);
+  const hand = new Hand({
+    players: [{ id: "alice", stack: 100 }, { id: "bob", stack: 100 }],
+    minRaise: 2, smallBlind: 1, bigBlind: 2, dealerIndex: 0, deck,
+  });
+  hand.applyAction("alice", "raise", 10);
+  hand.applyAction("bob", "fold");
+
+  assert.ok(hand.complete);
+  assert.equal(hand.allInSnapshot, null);
+});

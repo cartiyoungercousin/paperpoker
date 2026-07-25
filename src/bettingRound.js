@@ -26,6 +26,10 @@ export class BettingRound {
     this.minRaise = minRaise;
     this.actingIndex = actingIndex;
     this.actedSinceLastAggression = new Set();
+    // Counts "bet"/"raise" actions taken during this street (not the forced
+    // blinds/currentBet this round may have started with) - used to classify
+    // preflop raises as an open (raiseCount was 0) vs a 3-bet+ (was >= 1).
+    this.raiseCount = 0;
   }
 
   getPlayer(id) {
@@ -125,6 +129,7 @@ export class BettingRound {
 
       this.currentBet = raiseTo;
       this.actedSinceLastAggression = new Set([playerId]);
+      this.raiseCount++;
     } else {
       throw new Error(`Unknown action: ${action}`);
     }

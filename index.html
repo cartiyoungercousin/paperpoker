@@ -18,46 +18,46 @@
       <h1 id="home-title">Paper Poker</h1>
       <p id="home-tagline">For both the casual and quantitative player</p>
       <p id="home-subtitle">Texas Hold'em</p>
-      <div id="home-form">
-        <div class="fg">
+
+      <div id="home-top-row">
+        <div class="fg" id="username-fg">
           <label>Username</label>
           <input type="text" id="input-username" placeholder="Your name" maxlength="16" value="You" />
         </div>
-        <div class="fg">
-          <label>Difficulty</label>
-          <div id="difficulty-boxes">
-            <div class="diff-box" data-diff="easy" style="background:rgba(76,175,80,0.7);color:#fff">Easy</div>
-            <div class="diff-box" data-diff="medium" style="background:rgba(255,193,7,0.7);color:#000">Medium</div>
-            <div class="diff-box" data-diff="hard" style="background:rgba(239,83,80,0.7);color:#fff">Hard</div>
-            <div class="diff-box" data-diff="expert" style="background:rgba(255,255,255,0.2);color:#fff">Expert</div>
-          </div>
-          <input type="hidden" id="input-difficulty" value="easy" />
-        </div>
         <div id="home-config-row">
           <button id="btn-show-settings" class="sec-btn config-btn">⚙ Game Config</button>
-          <button id="btn-volume-settings" class="sec-btn icon-btn" title="Site Settings">⚙ Settings</button>
         </div>
       </div>
+
+      <div id="difficulty-label">Choose Your Opponents' Difficulty</div>
+      <div id="difficulty-boxes">
+        <div class="diff-box" data-diff="easy">
+          <div class="diff-box-name">Easy</div>
+          <p class="diff-box-desc">Bots play loose and passive. They rarely bet or raise without a very strong hand, mostly just check and call, and don't factor in pot odds or equity at all.</p>
+        </div>
+        <div class="diff-box" data-diff="medium">
+          <div class="diff-box-name">Medium</div>
+          <p class="diff-box-desc">Bots stick to decent starting hands and fold the rest. They bet when they likely have the best of it, call along with draws, and bluff only occasionally.</p>
+        </div>
+        <div class="diff-box" data-diff="hard">
+          <div class="diff-box-name">Hard</div>
+          <p class="diff-box-desc">Bots play tight and aggressive. They only enter pots with premium hands, size bets differently for value vs. draws, and apply pressure with semi-bluffs and the odd check-raise.</p>
+        </div>
+        <div class="diff-box" data-diff="expert">
+          <div class="diff-box-name">Expert</div>
+          <p class="diff-box-desc">Bots weigh pot odds and hand ranges on every street, mix in 3-bets and well-timed bluffs, and adapt their aggression and calling frequency to a personality you can fine-tune before each hand.</p>
+        </div>
+      </div>
+      <input type="hidden" id="input-difficulty" value="easy" />
+
       <div id="home-actions">
         <button id="btn-home-start">Start Game</button>
-      </div>
-    </div>
-    <!-- Site Settings Modal -->
-    <div id="site-settings-modal" class="hidden">
-      <div id="site-settings-content">
-        <h2>Site Settings</h2>
-        <div class="ss-fg">
-          <label>Master Volume <span id="volume-val">80%</span></label>
-          <input type="range" id="set-volume" min="0" max="100" value="80" />
-        </div>
-        <div id="site-settings-actions">
-          <button id="btn-site-settings-ok" class="sec-btn" style="width:auto">Close</button>
-        </div>
+        <button id="btn-open-trainer" class="sec-btn">🎯 Preflop Range Trainer</button>
       </div>
     </div>
     <div id="settings-modal" class="hidden">
       <div id="settings-content">
-        <h2>Table Settings</h2>
+        <h2>Game Config</h2>
         <div id="settings-form">
           <div class="fg">
             <label>Number of Players</label>
@@ -113,11 +113,42 @@
               </select>
             </div>
           </div>
+          <div class="fg">
+            <label>Master Volume <span id="volume-val">80%</span></label>
+            <input type="range" id="set-volume" min="0" max="100" value="80" />
+          </div>
         </div>
         <div id="settings-actions">
           <button id="btn-settings-ok">Apply</button>
           <button id="btn-settings-cancel" class="sec-btn">Cancel</button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RANGE TRAINER MODAL ===== -->
+  <div id="trainer-modal" class="hidden">
+    <div id="trainer-content">
+      <div id="trainer-head">
+        <span>Preflop Range Trainer</span>
+        <button id="btn-close-trainer">✕</button>
+      </div>
+      <div id="trainer-body">
+        <p id="trainer-disclaimer">Simplified reference ranges for training purposes — not a GTO solver.</p>
+        <div id="trainer-stats">
+          <div class="arow"><span>Reps</span><span id="tr-reps">0</span></div>
+          <div class="arow"><span>Correct</span><span id="tr-correct">0</span></div>
+          <div class="arow"><span>Accuracy</span><span id="tr-accuracy">—</span></div>
+        </div>
+        <div id="trainer-scenario">—</div>
+        <div id="trainer-hand"></div>
+        <div id="trainer-actions">
+          <button id="btn-trainer-fold" class="act-btn fold-btn">Fold</button>
+          <button id="btn-trainer-call" class="act-btn call-btn">Call</button>
+          <button id="btn-trainer-raise" class="act-btn raise-btn">Raise</button>
+        </div>
+        <div id="trainer-feedback" class="hidden"></div>
+        <button id="btn-trainer-next" class="hidden">Next Hand</button>
       </div>
     </div>
   </div>
@@ -134,8 +165,8 @@
     </div>
     <div id="pre-hand-overlay" class="hidden">
       <div id="pre-hand-card">
-        <h2>Bot Customization</h2>
-        <p>Configure your opponents before the hand begins.</p>
+        <h2>Configure Bots...</h2>
+        <p>Configure bots before the hand begins.</p>
         <div id="bot-customize-form">
           <div class="bc-fg">
             <label>Personality</label>
@@ -188,6 +219,7 @@
         <span id="h-blinds">10/20</span>
       </div>
       <div id="hr">
+        <button id="btn-toggle-turbo" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto" title="Speed up bot turns">⚡ Turbo: Off</button>
         <button id="btn-pause-game" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto">⏸ Pause</button>
         <button id="btn-toggle-stats">Stats</button>
         <button id="btn-home-return">Leave</button>
@@ -282,6 +314,7 @@
             <button id="btn-raise" class="act-btn raise-btn">Raise</button>
           </div>
         </div>
+        <div id="hotkey-hint">F Fold&nbsp;&nbsp;C Check/Call&nbsp;&nbsp;R Raise&nbsp;&nbsp;Enter Confirm&nbsp;&nbsp;Space Next Hand</div>
       </div>
 
       <!-- Right spacer -->
@@ -298,19 +331,20 @@
       </div>
       <div id="analyzer-body">
         <div id="analyzer-replay">
-          <div id="analyzer-replay-header">Replay Timeline</div>
-          <div id="analyzer-replay-steps"></div>
+          <div id="analyzer-replay-header">Replay</div>
+          <div id="analyzer-street-tabs"></div>
+          <div id="analyzer-street-board"></div>
+          <div id="analyzer-street-info">
+            <div class="arow"><span>Pot</span><span id="as-pot">—</span></div>
+            <div class="arow"><span>Your Equity</span><span id="as-equity">—</span></div>
+          </div>
+          <div id="analyzer-street-actions"></div>
         </div>
         <div id="analyzer-stats">
           <div class="arow"><span>Your Hand</span><span id="aa-hand">—</span></div>
           <div class="arow"><span>Board</span><span id="aa-board">—</span></div>
           <div class="arow"><span>Best Hand</span><span id="aa-best">—</span></div>
-          <div class="arow"><span>Equity Pre-Flop</span><span id="aa-eq-pre">—</span></div>
-          <div class="arow"><span>Equity on Flop</span><span id="aa-eq-flop">—</span></div>
-          <div class="arow"><span>Equity on Turn</span><span id="aa-eq-turn">—</span></div>
-          <div class="arow"><span>Equity on River</span><span id="aa-eq-river">—</span></div>
           <div class="arow"><span>Pot Odds Faced</span><span id="aa-pot-odds">—</span></div>
-          <div class="arow"><span>Recommended Action</span><span id="aa-recommend">—</span></div>
           <div class="arow"><span>Your Action</span><span id="aa-your-action">—</span></div>
           <div class="arow"><span>EV of Your Action</span><span id="aa-ev">—</span></div>
           <div class="arow"><span>Mistake?</span><span id="aa-mistake" style="font-weight:600">—</span></div>
@@ -325,7 +359,13 @@
     <div id="stats-body">
       <!-- Live Balance Graph -->
       <div id="stats-graph-section">
-        <div id="stats-graph-header">Balance Over Time</div>
+        <div id="stats-graph-header">
+          Balance Over Time
+          <span id="graph-legend">
+            <span class="legend-item"><span class="legend-dot legend-dot-actual"></span>Actual</span>
+            <span class="legend-item"><span class="legend-dot legend-dot-ev"></span>EV</span>
+          </span>
+        </div>
         <canvas id="balance-graph" width="248" height="120"></canvas>
       </div>
       <div class="sr"><span class="sl">Hands Played</span><span class="sv" id="st-hp">0</span></div>
@@ -337,13 +377,29 @@
       <div class="sr"><span class="sl">Net Profit</span><span class="sv" id="st-np">$0</span></div>
       <div class="sr"><span class="sl">Return on Investment</span><span class="sv" id="st-roi">—</span></div>
       <div class="sr"><span class="sl">VPIP</span><span class="sv" id="st-vp">0%</span></div>
+      <div class="sr"><span class="sl">PFR %</span><span class="sv" id="st-pfr">0%</span></div>
+      <div class="sr"><span class="sl">3-Bet %</span><span class="sv" id="st-3bet">—</span></div>
       <div class="sr"><span class="sl">Aggression Factor</span><span class="sv" id="st-af">—</span></div>
       <div class="sr"><span class="sl">Fold %</span><span class="sv" id="st-fp">0%</span></div>
       <div class="sr"><span class="sl">Bets / Raises</span><span class="sv" id="st-br">0</span></div>
       <div class="sr"><span class="sl">Calls</span><span class="sv" id="st-ca">0</span></div>
       <div class="sr"><span class="sl">Checks</span><span class="sv" id="st-ch">0</span></div>
-      <div class="sr"><span class="sl">Expected Value (EV)</span><span class="sv" id="st-ev">—</span></div>
-      <div class="sr"><span class="sl">EV Captured</span><span class="sv" id="st-evcap">—</span></div>
+      <div class="sr"><span class="sl">WTSD % (of hands dealt)</span><span class="sv" id="st-wtsd">0%</span></div>
+      <div class="sr"><span class="sl">W$SD %</span><span class="sv" id="st-wsd">—</span></div>
+      <div class="sr"><span class="sl">Showdown Winnings</span><span class="sv" id="st-sdw">$0</span></div>
+      <div class="sr"><span class="sl">Non-Showdown Winnings</span><span class="sv" id="st-nsdw">$0</span></div>
+      <div class="sr"><span class="sl">Biggest Win</span><span class="sv" id="st-bw">$0</span></div>
+      <div class="sr"><span class="sl">Biggest Loss</span><span class="sv" id="st-bl">$0</span></div>
+      <div class="sr"><span class="sl">Current Streak</span><span class="sv" id="st-streak">—</span></div>
+      <div class="sr"><span class="sl">Session Time</span><span class="sv" id="st-session-time">—</span></div>
+      <div class="sr"><span class="sl">Hands / Hour</span><span class="sv" id="st-hands-hr">—</span></div>
+      <div class="sr"><span class="sl">All-In EV ($)</span><span class="sv" id="st-ev">—</span></div>
+      <div class="sr"><span class="sl">Luck ($)</span><span class="sv" id="st-luck">—</span></div>
+      <div class="sr"><span class="sl">All-In Hands Tracked</span><span class="sv" id="st-allin-count">0</span></div>
+      <div id="stats-export-row">
+        <button id="btn-export-csv" class="sec-btn">Export CSV</button>
+        <button id="btn-export-json" class="sec-btn">Export JSON</button>
+      </div>
     </div>
   </div>
 
@@ -355,11 +411,13 @@
     const RD = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
 
     let playerName = 'You';
+    let homeVisible = true; // tracks whether the home screen (not the live table) is showing, so we don't play game sounds in the background
     let settings = { numPlayers: 6, startingStack: 1000, smallBlind: 10, bigBlind: 20, shotClockSeconds: 0, difficulty: 'easy' };
     let timerInterval = null;
     let timerRemaining = 0;
     let timerTotal = 0;
     let balanceHistory = [];
+    let evHistory = [];
 
     // ===== CATEGORY constants (mirror server) =====
     const CATEGORY = { HIGH_CARD:0, ONE_PAIR:1, TWO_PAIR:2, THREE_OF_A_KIND:3, STRAIGHT:4, FLUSH:5, FULL_HOUSE:6, FOUR_OF_A_KIND:7, STRAIGHT_FLUSH:8 };
@@ -470,9 +528,13 @@
       playerName = document.getElementById('input-username').value.trim() || 'You';
       document.getElementById('hm').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
       document.getElementById('hu').textContent = getDisplayName(playerName);
+      homeVisible = false;
       document.getElementById('home-screen').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
       document.getElementById('pre-hand-overlay').classList.remove('hidden');
+      // Force-hide the pause modal immediately - a fresh game should never open paused,
+      // even if the server's isPaused flag hasn't round-tripped back to false yet.
+      document.getElementById('pause-modal').classList.add('hidden');
       socket.emit('updateSettings', { ...settings, playerName, difficulty });
     });
     document.getElementById('btn-start-hand').addEventListener('click',()=>{
@@ -487,20 +549,22 @@
       document.getElementById('pre-hand-overlay').classList.add('hidden');
       socket.emit('startGame');
     });
+    function leaveToHome() {
+      homeVisible = true;
+      socket.emit('pauseGame'); // stop the shared game (bot turns, hand-complete sounds) while we're away
+      stopTimer();
+      document.getElementById('app').classList.add('hidden');
+      document.getElementById('stats-panel').classList.add('hidden');
+      document.getElementById('analyzer-modal').classList.add('hidden');
+      document.getElementById('pre-hand-overlay').classList.add('hidden');
+      document.getElementById('home-screen').classList.remove('hidden');
+    }
     document.getElementById('logo-link').addEventListener('click',(e)=>{
       e.preventDefault();
-      document.getElementById('app').classList.add('hidden');
-      document.getElementById('stats-panel').classList.add('hidden');
-      document.getElementById('analyzer-modal').classList.add('hidden');
-      document.getElementById('pre-hand-overlay').classList.add('hidden');
-      document.getElementById('home-screen').classList.remove('hidden');
+      leaveToHome();
     });
     document.getElementById('btn-home-return').addEventListener('click',()=>{
-      document.getElementById('app').classList.add('hidden');
-      document.getElementById('stats-panel').classList.add('hidden');
-      document.getElementById('analyzer-modal').classList.add('hidden');
-      document.getElementById('pre-hand-overlay').classList.add('hidden');
-      document.getElementById('home-screen').classList.remove('hidden');
+      leaveToHome();
     });
 
     // ===== Stats Toggle =====
@@ -517,6 +581,45 @@
       socket.emit('setResetBalance',{reset:e.target.checked});
     });
 
+    // ===== Export =====
+    let pendingExportFormat = null;
+    socket.on('exportData', (data) => {
+      if (!data || !data.handLog) return;
+      if (pendingExportFormat === 'csv') downloadHandLogCSV(data.handLog);
+      else if (pendingExportFormat === 'json') downloadHandLogJSON(data.handLog);
+      pendingExportFormat = null;
+    });
+    document.getElementById('btn-export-csv').addEventListener('click', () => {
+      pendingExportFormat = 'csv';
+      socket.emit('requestExport');
+    });
+    document.getElementById('btn-export-json').addEventListener('click', () => {
+      pendingExportFormat = 'json';
+      socket.emit('requestExport');
+    });
+    function downloadHandLogJSON(handLog) {
+      const blob = new Blob([JSON.stringify(handLog, null, 2)], { type: 'application/json' });
+      triggerDownload(blob, 'paperpoker-hands.json');
+    }
+    function downloadHandLogCSV(handLog) {
+      const cols = ['handNumber','timestamp','position','holeCards','board','contributed','payout','net','wentToShowdown','showdownDescription','potSize','numPlayersDealt','allInEV'];
+      const esc = (v) => {
+        if (v === null || v === undefined) return '';
+        const str = Array.isArray(v) ? v.join(' ') : String(v);
+        return /[",\n]/.test(str) ? '"' + str.replace(/"/g, '""') + '"' : str;
+      };
+      const rows = [cols.join(',')].concat(handLog.map(r => cols.map(c => esc(r[c])).join(',')));
+      const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+      triggerDownload(blob, 'paperpoker-hands.csv');
+    }
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     // ===== Analyzer =====
     document.getElementById('btn-analyze-hand').addEventListener('click',()=>{
       socket.emit('requestHandAnalysis');
@@ -525,8 +628,14 @@
       document.getElementById('analyzer-modal').classList.add('hidden');
     });
 
+    let analyzerData = null;
+    let analyzerStreetIdx = 0;
+
     socket.on('handAnalysis', (data) => {
       document.getElementById('analyzer-modal').classList.remove('hidden');
+      analyzerData = data;
+      const snaps = data.streetSnapshots || [];
+      analyzerStreetIdx = snaps.length > 0 ? snaps.length - 1 : 0; // default to the latest street reached
       renderHandAnalysis(data);
     });
 
@@ -536,21 +645,7 @@
       const board = data.board || [];
       document.getElementById('aa-hand').textContent = hole.map(c => RD[c.rank] + SS[c.suit]).join(' ') || '—';
       document.getElementById('aa-board').textContent = board.length > 0 ? board.map(c => RD[c.rank] + SS[c.suit]).join(' ') : '—';
-
-      // Compute best hand
-      const allCards = [...hole, ...board];
-      if (allCards.length >= 5) {
-        const best = bestHand(allCards);
-        document.getElementById('aa-best').textContent = describeScore(best.score);
-      } else {
-        document.getElementById('aa-best').textContent = '—';
-      }
-
-      // Equity estimates at each street
-      document.getElementById('aa-eq-pre').textContent = (estimateEquity(hole, []) * 100).toFixed(1) + '%';
-      document.getElementById('aa-eq-flop').textContent = board.length >= 3 ? (estimateEquity(hole, board.slice(0,3)) * 100).toFixed(1) + '%' : '—';
-      document.getElementById('aa-eq-turn').textContent = board.length >= 4 ? (estimateEquity(hole, board.slice(0,4)) * 100).toFixed(1) + '%' : '—';
-      document.getElementById('aa-eq-river').textContent = board.length >= 5 ? (estimateEquity(hole, board) * 100).toFixed(1) + '%' : '—';
+      document.getElementById('aa-best').textContent = data.yourBestHandDescription || '—';
 
       // Pot odds
       const totalPot = data.pots ? data.pots.reduce((s,p) => s + p.amount, 0) : 0;
@@ -558,102 +653,64 @@
       const youWon = data.payouts && data.payouts['You'] ? data.payouts['You'] : 0;
       document.getElementById('aa-pot-odds').textContent = totalPot > 0 ? (youContributed / totalPot * 100).toFixed(1) + '%' : '—';
 
-      // Recommendation and analysis
+      // Result summary
       const youNet = youWon - youContributed;
       document.getElementById('aa-ev').textContent = (youNet >= 0 ? '+' : '') + '$' + youNet;
       document.getElementById('aa-mistake').textContent = youNet < 0 ? '⚠️ Possible mistake' : '✅ Well played';
       document.getElementById('aa-mistake').style.color = youNet < 0 ? '#ef5350' : '#4caf50';
-      document.getElementById('aa-recommend').textContent = youWon > 0 ? 'Continue playing' : 'Consider folding earlier';
-      document.getElementById('aa-your-action').textContent = youWon > 0 ? 'Aggressive (profitable)' : 'Passive (lost pot)';
+      document.getElementById('aa-your-action').textContent = youWon > 0 ? 'Profitable' : 'Lost the pot';
 
-      // Replay timeline
-      const stepsEl = document.getElementById('analyzer-replay-steps');
-      stepsEl.innerHTML = '';
-      if (data.handHistory) {
-        data.handHistory.forEach((line, i) => {
-          const step = document.createElement('div');
-          step.className = 'replay-step';
-          step.textContent = line;
-          stepsEl.appendChild(step);
+      renderStreetTabs(data);
+      renderStreetDetail(data);
+    }
+
+    function renderStreetTabs(data) {
+      const tabsEl = document.getElementById('analyzer-street-tabs');
+      const snaps = data.streetSnapshots || [];
+      tabsEl.innerHTML = snaps.map((snap, i) => {
+        const label = snap.street.charAt(0).toUpperCase() + snap.street.slice(1);
+        return '<button class="street-tab' + (i === analyzerStreetIdx ? ' active' : '') + '" data-i="' + i + '">' + label + '</button>';
+      }).join('') || '<span class="street-board-empty">No hand played yet</span>';
+      tabsEl.querySelectorAll('.street-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          analyzerStreetIdx = parseInt(tab.dataset.i, 10);
+          renderHandAnalysis(analyzerData);
         });
+      });
+    }
+
+    function renderStreetDetail(data) {
+      const snaps = data.streetSnapshots || [];
+      const snap = snaps[analyzerStreetIdx];
+      const boardEl = document.getElementById('analyzer-street-board');
+      const actionsEl = document.getElementById('analyzer-street-actions');
+      const potEl = document.getElementById('as-pot');
+      const eqEl = document.getElementById('as-equity');
+      if (!snap) {
+        boardEl.innerHTML = '';
+        potEl.textContent = '—';
+        eqEl.textContent = '—';
+        actionsEl.innerHTML = '';
+        return;
       }
-    }
-
-    // Simple client-side hand evaluation for analysis
-    function evaluate5(cards) {
-      if (cards.length !== 5) return [0, 0, 0, 0, 0];
-      const ranksDesc = cards.map(c => c.rank).sort((a,b) => b - a);
-      const suits = cards.map(c => c.suit);
-      const isFlush = suits.every(s => s === suits[0]);
-      const counts = new Map();
-      for (const r of ranksDesc) counts.set(r, (counts.get(r) || 0) + 1);
-      const groups = [...counts.entries()].sort((a,b) => b[1] - a[1] || b[0] - a[0]);
-      const uniqueRanksDesc = [...new Set(ranksDesc)];
-      let isStraight = false, straightHigh = 0;
-      if (uniqueRanksDesc.length === 5) {
-        if (uniqueRanksDesc[0] - uniqueRanksDesc[4] === 4) { isStraight = true; straightHigh = uniqueRanksDesc[0]; }
-        else if (uniqueRanksDesc.join(',') === '14,5,4,3,2') { isStraight = true; straightHigh = 5; }
+      boardEl.innerHTML = snap.board.length > 0
+        ? snap.board.map(c => cHTML(c)).join('')
+        : '<span class="street-board-empty">No community cards yet</span>';
+      potEl.textContent = '$' + snap.potAtStreetStart;
+      if (typeof snap.equityAtStreet === 'number') {
+        eqEl.textContent = (snap.equityAtStreet * 100).toFixed(1) + '%' + (snap.equityIsExact ? ' (exact)' : ' (est.)');
+        eqEl.title = snap.equityIsExact
+          ? 'Computed exactly from a known all-in confrontation'
+          : 'Monte Carlo estimate vs. however many opponents were still live at this point';
+      } else {
+        eqEl.textContent = '—';
+        eqEl.title = '';
       }
-      if (isStraight && isFlush) return [8, straightHigh];
-      if (groups[0][1] === 4) return [7, groups[0][0], groups[1][0]];
-      if (groups[0][1] === 3 && groups[1][1] === 2) return [6, groups[0][0], groups[1][0]];
-      if (isFlush) return [5, ...ranksDesc];
-      if (isStraight) return [4, straightHigh];
-      if (groups[0][1] === 3) { const k = groups.slice(1).map(g => g[0]).sort((a,b) => b - a); return [3, groups[0][0], ...k]; }
-      if (groups[0][1] === 2 && groups[1][1] === 2) { const p = [groups[0][0], groups[1][0]].sort((a,b) => b - a); return [2, p[0], p[1], groups[2][0]]; }
-      if (groups[0][1] === 2) { const k = groups.slice(1).map(g => g[0]).sort((a,b) => b - a); return [1, groups[0][0], ...k]; }
-      return [0, ...ranksDesc];
-    }
-
-    function bestHand(cards) {
-      const combos = combinations(cards, 5);
-      let best = null;
-      for (const combo of combos) {
-        const score = evaluate5(combo);
-        if (!best || compareScores(score, best.score) > 0) best = { score, cards: combo };
-      }
-      return best;
-    }
-
-    function combinations(arr, k) {
-      const results = [];
-      function helper(start, combo) { if (combo.length === k) { results.push([...combo]); return; } for (let i = start; i < arr.length; i++) { combo.push(arr[i]); helper(i + 1, combo); combo.pop(); } }
-      helper(0, []);
-      return results;
-    }
-
-    function compareScores(a, b) {
-      const len = Math.max(a.length, b.length);
-      for (let i = 0; i < len; i++) { const diff = (a[i] || 0) - (b[i] || 0); if (diff !== 0) return diff; }
-      return 0;
-    }
-
-    function describeScore(score) {
-      const names = ['High Card', 'One Pair', 'Two Pair', 'Three of a Kind', 'Straight', 'Flush', 'Full House', 'Four of a Kind', 'Straight Flush'];
-      return names[score[0]] || 'Unknown';
-    }
-
-    function estimateEquity(hole, board) {
-      if (board.length === 0) {
-        const [c1, c2] = hole;
-        if (!c1 || !c2) return 0.08;
-        const pair = c1.rank === c2.rank;
-        const suited = c1.suit === c2.suit;
-        const high = Math.max(c1.rank, c2.rank);
-        let eq = 0.08;
-        if (pair) eq += c1.rank * 0.02;
-        if (high >= 14) eq += 0.08;
-        if (high >= 13) eq += 0.05;
-        if (high >= 12) eq += 0.03;
-        if (suited) eq += 0.02;
-        return Math.min(Math.max(eq, 0.02), 0.85);
-      }
-      const all = [...hole, ...board];
-      if (all.length < 5) return 0.2;
-      const best = bestHand(all);
-      const cat = best.score[0];
-      const eq = [0.15, 0.4, 0.55, 0.65, 0.7, 0.75, 0.85, 0.9, 0.95];
-      return eq[cat] || 0.15;
+      actionsEl.innerHTML = (snap.actions || []).map(a => {
+        const amtStr = a.amount > 0 ? ' $' + a.amount : '';
+        const actLabel = a.action.charAt(0).toUpperCase() + a.action.slice(1);
+        return '<div class="replay-step">' + a.actor + ': ' + actLabel + amtStr + '</div>';
+      }).join('') || '<div class="street-board-empty">No actions this street</div>';
     }
 
     // ===== Timer =====
@@ -694,8 +751,12 @@
         return;
       }
       const values = balanceHistory.map(b => b.balance);
-      const min = Math.min(...values) * 0.95;
-      const max = Math.max(...values) * 1.05;
+      const hasEV = evHistory.length === balanceHistory.length && evHistory.length >= 2;
+      const evValues = hasEV ? evHistory.map(e => e.ev) : [];
+      // Shared min/max across both lines so the gap between actual and EV reads honestly
+      const allValues = hasEV ? values.concat(evValues) : values;
+      const min = Math.min(...allValues) * 0.95;
+      const max = Math.max(...allValues) * 1.05;
       const range = max - min || 1;
       const pad = 10;
 
@@ -707,20 +768,35 @@
         ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - pad, y); ctx.stroke();
       }
 
-      // Draw line
+      const xFor = (i, n) => pad + (w - 2*pad) * i / (n - 1);
+      const yFor = (v) => pad + (h - 2*pad) * (1 - (v - min) / range);
+
+      // EV line drawn first (underneath), no fill - just a reference line
+      if (hasEV) {
+        ctx.beginPath();
+        ctx.strokeStyle = '#4dd0e1';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        evValues.forEach((v, i) => {
+          const x = xFor(i, evValues.length), y = yFor(v);
+          i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Actual balance line, with fill under it
       ctx.beginPath();
       ctx.strokeStyle = '#c9a84c';
       ctx.lineWidth = 2;
       values.forEach((v, i) => {
-        const x = pad + (w - 2*pad) * i / (values.length - 1);
-        const y = pad + (h - 2*pad) * (1 - (v - min) / range);
+        const x = xFor(i, values.length), y = yFor(v);
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       });
       ctx.stroke();
 
       // Fill area under line
-      const lastX = pad + (w - 2*pad) * (values.length - 1) / (values.length - 1);
-      const lastY = pad + (h - 2*pad) * (1 - (values[values.length-1] - min) / range);
+      const lastX = xFor(values.length - 1, values.length);
       ctx.lineTo(lastX, h - pad); ctx.lineTo(pad, h - pad); ctx.closePath();
       const grad = ctx.createLinearGradient(0, pad, 0, h - pad);
       grad.addColorStop(0, 'rgba(201,168,76,0.2)');
@@ -728,17 +804,27 @@
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Current value label
+      // Current value labels
       ctx.fillStyle = '#c9a84c';
       ctx.font = 'bold 9px IBM Plex Mono, monospace';
       ctx.textAlign = 'right';
       ctx.fillText('$' + values[values.length-1], w - pad, pad + 10);
+      if (hasEV) {
+        ctx.fillStyle = '#4dd0e1';
+        ctx.fillText('$' + Math.round(evValues[evValues.length-1]), w - pad, h - pad - 4);
+      }
     }
 
     // ===== Game Update =====
     let prevHandCount = 0;
     function updateGameState(state) {
-      if (!state || !state.gameStarted) return;
+      if (!state) return;
+      // Keep the pause modal in sync even on states where the rest of this function
+      // bails out early (e.g. right after updateSettings resets gameStarted to false) -
+      // otherwise it can get stuck visible from an earlier pause when a new game starts.
+      document.getElementById('pause-modal').classList.toggle('hidden', !state.isPaused);
+      if (typeof state.turboMode === 'boolean' && state.turboMode !== turboEnabled) setTurboButtonState(state.turboMode);
+      if (!state.gameStarted) return;
       const isYou = p => p.type === 'human' || p.id === 'You' || p.id === playerName;
 
       // Track last actions for popups
@@ -752,10 +838,11 @@
         window._prevLastActions = state.lastActions;
       }
 
-      // Update balance history only when hand completes (handCount changes)
+      // Update balance/EV history only when hand completes (handCount changes)
       if (state.balanceHistory && state.handCount !== prevHandCount) {
         prevHandCount = state.handCount;
         balanceHistory = state.balanceHistory;
+        if (state.evHistory) evHistory = state.evHistory;
         if (statsOpen) drawBalanceGraph();
       }
 
@@ -800,8 +887,8 @@
         el.className = 'seat ' + (p.active ? 'active' : '') + ' ' + (p.folded ? 'folded' : '') + ' ' + (you ? 'you' : '') + ' ' + colorClass;
         el.style.top = pos.t;
         el.style.left = pos.l;
-        const isSB = state.smallBlind && p.contributed === state.smallBlind;
-        const isBB = state.bigBlind && p.contributed === state.bigBlind;
+        const isSB = state.sbId && p.id === state.sbId;
+        const isBB = state.bbId && p.id === state.bbId;
         let badge = '';
         if (isSB) badge = '<span class="badge sbb">SB</span>';
         else if (isBB) badge = '<span class="badge bbb">BB</span>';
@@ -895,7 +982,7 @@
         }
         document.getElementById('result-details').innerHTML = html;
         document.getElementById('toggle-reset').checked = state.resetBalanceEachHand || false;
-        if (youWon) swin(); else slose();
+        if (!homeVisible) { if (youWon) swin(); else slose(); }
       } else { overlay.classList.add('hidden'); }
 
       // Pre-hand state
@@ -909,6 +996,7 @@
         const colorMap = { 'color-0': 'rgba(255,255,255,0.9)', 'color-1': '#4dd0e1', 'color-2': '#ffa726', 'color-3': '#ab47bc', 'color-4': '#66bb6a', 'color-5': '#ef5350' };
         playerColors[p.id] = colorMap[p.colorClass] || 'rgba(255,255,255,0.6)';
       });
+      const wasNearBottom = hl.scrollTop + hl.clientHeight >= hl.scrollHeight - 30;
       hl.innerHTML = state.handHistory.map(l => {
         let colored = l;
         for (const [pid, color] of Object.entries(playerColors)) {
@@ -917,7 +1005,8 @@
         }
         return '<div class="h-line">' + colored + '</div>';
       }).join('');
-      hl.scrollTop = hl.scrollHeight;
+      // Only snap to the newest entry if the user hasn't scrolled up to read older history
+      if (wasNearBottom) hl.scrollTop = hl.scrollHeight;
 
       // Stats
       renderStats(state);
@@ -933,31 +1022,62 @@
       setSV('st-tw', '$' + s.totalWinnings);
       setSV('st-bp', '$' + s.biggestPot);
       setSV('st-cs', you ? '$' + you.stack : '$0');
-      const net = you ? you.stack - settings.startingStack : 0;
+      const net = s.netProfit || 0;
       const npEl = document.getElementById('st-np');
       npEl.textContent = net >= 0 ? '+$' + net : '-$' + Math.abs(net);
       npEl.style.color = net >= 0 ? '#4caf50' : '#ef5350';
       const roi = s.totalInvested > 0 ? ((net / s.totalInvested) * 100).toFixed(1) : '—';
       document.getElementById('st-roi').textContent = roi !== '—' ? (net >= 0 ? '+' : '') + roi + '%' : '—';
       document.getElementById('st-roi').style.color = s.totalInvested > 0 ? (net >= 0 ? '#4caf50' : '#ef5350') : 'rgba(255,255,255,0.4)';
-      document.getElementById('st-vp').textContent = s.totalActions > 0 ? Math.round(s.vpipActions / s.totalActions * 100) + '%' : '0%';
-      const af = s.totalFolds + s.totalCalls > 0 ? ((s.totalBets + s.totalRaises) / (s.totalCalls + s.totalFolds)).toFixed(2) : '—';
+      document.getElementById('st-vp').textContent = s.handsPlayed > 0 ? Math.round((s.vpipHands || 0) / s.handsPlayed * 100) + '%' : '0%';
+      const af = s.totalCalls > 0 ? ((s.totalBets + s.totalRaises) / s.totalCalls).toFixed(2) : '—';
       document.getElementById('st-af').textContent = af;
       document.getElementById('st-fp').textContent = s.totalActions > 0 ? Math.round(s.totalFolds / s.totalActions * 100) + '%' : '0%';
       document.getElementById('st-br').textContent = (s.totalBets + s.totalRaises);
       document.getElementById('st-ca').textContent = s.totalCalls;
       document.getElementById('st-ch').textContent = s.totalChecks;
-      const numP = state.players.length;
-      const avgEq = numP > 0 ? 1 / numP : 0.1667;
-      const totalEV = avgEq * s.handsPlayed * (settings.smallBlind * 6);
+
+      document.getElementById('st-pfr').textContent = s.handsPlayed > 0 ? Math.round((s.pfrHands || 0) / s.handsPlayed * 100) + '%' : '0%';
+      document.getElementById('st-3bet').textContent = s.threeBetOpportunities > 0 ? Math.round((s.threeBetHands || 0) / s.threeBetOpportunities * 100) + '%' : '—';
+
+      document.getElementById('st-wtsd').textContent = s.handsPlayed > 0 ? Math.round((s.showdownsSeen || 0) / s.handsPlayed * 100) + '%' : '0%';
+      document.getElementById('st-wsd').textContent = s.showdownsSeen > 0 ? Math.round((s.showdownsWon || 0) / s.showdownsSeen * 100) + '%' : '—';
+      document.getElementById('st-sdw').textContent = '$' + (s.showdownWinnings || 0);
+      document.getElementById('st-nsdw').textContent = '$' + (s.nonShowdownWinnings || 0);
+      document.getElementById('st-bw').textContent = '$' + (s.biggestWin || 0);
+      document.getElementById('st-bl').textContent = (s.biggestLoss || 0) < 0 ? '-$' + Math.abs(s.biggestLoss) : '$0';
+
+      const streak = s.currentStreak || 0;
+      const streakEl = document.getElementById('st-streak');
+      if (streak === 0) { streakEl.textContent = '—'; streakEl.style.color = ''; }
+      else { streakEl.textContent = (streak > 0 ? 'W' : 'L') + Math.abs(streak); streakEl.style.color = streak > 0 ? '#4caf50' : '#ef5350'; }
+
+      if (state.sessionStart) {
+        const elapsedMs = Date.now() - state.sessionStart;
+        const elapsedMin = elapsedMs / 60000;
+        const hh = Math.floor(elapsedMin / 60), mm = Math.floor(elapsedMin % 60), ss = Math.floor((elapsedMs / 1000) % 60);
+        document.getElementById('st-session-time').textContent = hh > 0 ? `${hh}h ${mm}m` : `${mm}m ${ss}s`;
+        document.getElementById('st-hands-hr').textContent = elapsedMin > 0.5 ? Math.round(s.handsPlayed / (elapsedMin / 60)) : '—';
+      } else {
+        document.getElementById('st-session-time').textContent = '—';
+        document.getElementById('st-hands-hr').textContent = '—';
+      }
+
+      const allInCount = s.allInHandsTracked || 0;
+      document.getElementById('st-allin-count').textContent = allInCount;
       const evEl = document.getElementById('st-ev');
-      if (totalEV > 0 && s.totalActions > 0) {
-        evEl.textContent = '$' + totalEV.toFixed(1);
-        const cap = ((s.totalWinnings / totalEV) * 100).toFixed(1);
-        const capEl = document.getElementById('st-evcap');
-        capEl.textContent = cap + '%';
-        capEl.style.color = parseFloat(cap) >= 100 ? '#4caf50' : '#ef5350';
-      } else { evEl.textContent = '—'; document.getElementById('st-evcap').textContent = '—'; }
+      const luckEl = document.getElementById('st-luck');
+      if (allInCount > 0) {
+        const ev = s.cumulativeEVDollars || 0;
+        evEl.textContent = (ev >= 0 ? '+$' : '-$') + Math.abs(ev).toFixed(0);
+        evEl.style.color = ev >= 0 ? '#4caf50' : '#ef5350';
+        const luck = s.luckDollars || 0;
+        luckEl.textContent = (luck >= 0 ? '+$' : '-$') + Math.abs(luck).toFixed(0);
+        luckEl.style.color = luck >= 0 ? '#4caf50' : '#ef5350';
+      } else {
+        evEl.textContent = '—'; evEl.style.color = '';
+        luckEl.textContent = '—'; luckEl.style.color = '';
+      }
     }
 
     function setSV(id, v) { document.getElementById(id).textContent = v; }
@@ -1012,20 +1132,23 @@
       socket.emit('resumeGame');
     });
 
-    // ===== Site Settings Modal =====
-    document.getElementById('btn-volume-settings').addEventListener('click', () => {
-      document.getElementById('site-settings-modal').classList.remove('hidden');
+    // ===== Turbo Mode =====
+    let turboEnabled = false;
+    function setTurboButtonState(on) {
+      turboEnabled = on;
+      const btn = document.getElementById('btn-toggle-turbo');
+      btn.textContent = on ? '⚡ Turbo: On' : '⚡ Turbo: Off';
+      btn.style.color = on ? '#c9a84c' : '';
+      btn.style.borderColor = on ? 'rgba(201,168,76,0.4)' : '';
+    }
+    document.getElementById('btn-toggle-turbo').addEventListener('click', () => {
+      socket.emit('setTurboMode', { turbo: !turboEnabled });
+      setTurboButtonState(!turboEnabled); // optimistic, corrected by the next gameState if needed
     });
-    document.getElementById('btn-site-settings-ok').addEventListener('click', () => {
-      document.getElementById('site-settings-modal').classList.add('hidden');
-    });
-
-    // ===== Socket Events =====
-    // ===== Socket Events =====
 
     // ===== Socket Events =====
     socket.on('gameState', updateGameState);
-    socket.on('botTurn', () => { sbotTurn(); });
+    socket.on('botTurn', () => { if (!homeVisible) sbotTurn(); });
     socket.on('handComplete', (data) => {
       const felt = document.getElementById('table-felt');
       felt.classList.remove('ripple-win', 'ripple-lose');
@@ -1057,6 +1180,60 @@
     document.getElementById('btn-bet').addEventListener('click', () => { doBetOrRaise('bet'); });
     document.getElementById('btn-raise').addEventListener('click', () => { doBetOrRaise('raise'); });
     document.getElementById('btn-next-hand').addEventListener('click', () => { stopTimer(); socket.emit('nextHand'); });
+
+    // ===== Keyboard Hotkeys =====
+    // F=fold, C=check/call, R=focus the raise input, Space=next hand. Never
+    // fires while typing in any input/select, or while the home screen is showing.
+    document.addEventListener('keydown', (e) => {
+      const tag = document.activeElement && document.activeElement.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      const homeScreen = document.getElementById('home-screen');
+      if (homeScreen && !homeScreen.classList.contains('hidden')) return;
+
+      const resultOverlay = document.getElementById('result-overlay');
+      const resultVisible = resultOverlay && !resultOverlay.classList.contains('hidden');
+      if (resultVisible && e.code === 'Space') {
+        e.preventDefault();
+        document.getElementById('btn-next-hand').click();
+        return;
+      }
+
+      const bar = document.getElementById('action-bar');
+      const barVisible = bar && bar.style.display !== 'none';
+      if (!barVisible) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'f') {
+        document.getElementById('btn-fold').click();
+      } else if (key === 'c') {
+        const checkBtn = document.getElementById('btn-check');
+        const callBtn = document.getElementById('btn-call');
+        if (checkBtn.style.display !== 'none') checkBtn.click();
+        else if (callBtn.style.display !== 'none') callBtn.click();
+      } else if (key === 'r') {
+        const raiseBtn = document.getElementById('btn-raise');
+        const betBtn = document.getElementById('btn-bet');
+        if (raiseBtn.style.display !== 'none' || betBtn.style.display !== 'none') {
+          e.preventDefault();
+          const betInput = document.getElementById('bet-amount');
+          betInput.focus();
+          betInput.select();
+        }
+      }
+    });
+
+    // Enter inside the bet amount field confirms the bet/raise (handled here,
+    // on the field itself, rather than in the global listener above, since
+    // that listener bails out early whenever an input is focused).
+    document.getElementById('bet-amount').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const raiseBtn = document.getElementById('btn-raise');
+      const betBtn = document.getElementById('btn-bet');
+      if (raiseBtn.style.display !== 'none') raiseBtn.click();
+      else if (betBtn.style.display !== 'none') betBtn.click();
+    });
   </script>
+  <script src="range-trainer.js"></script>
 </body>
 </html>

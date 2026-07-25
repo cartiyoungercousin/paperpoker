@@ -28,6 +28,10 @@ export class Hand {
     this.currentRound = null;
     this.complete = false;
     this.result = null;
+    // Set once, the first time every player still live in the hand is all-in
+    // (no more decisions possible) - captures the exact board/hole-card state
+    // at that moment so callers can compute true all-in win probability.
+    this.allInSnapshot = null;
 
     this._dealHoleCards();
     this._postBlinds();
@@ -61,8 +65,11 @@ export class Hand {
     const sbSeat = n === 2 ? this.dealerIndex : (this.dealerIndex + 1) % n;
     const bbSeat = n === 2 ? (this.dealerIndex + 1) % n : (this.dealerIndex + 2) % n;
 
-    this._postBlind(this.order[sbSeat], this.smallBlind);
-    this._postBlind(this.order[bbSeat], this.bigBlind);
+    this.sbId = this.order[sbSeat];
+    this.bbId = this.order[bbSeat];
+
+    this._postBlind(this.sbId, this.smallBlind);
+    this._postBlind(this.bbId, this.bigBlind);
 
     this._preflopFirstActSeat = n === 2 ? sbSeat : (bbSeat + 1) % n;
     this._postflopFirstActSeat = sbSeat;
@@ -157,6 +164,20 @@ export class Hand {
     if (this.streetIndex >= STREETS.length - 1) {
       this._finish();
       return;
+    }
+
+    // If everyone still live in the hand is now all-in, no further decisions
+    // are possible - the remaining runout is pure chance. Snapshot the board
+    // and hole cards right now, before any more community cards are dealt.
+    if (!this.allInSnapshot) {
+      const active = this._activePlayers();
+      const everyoneAllIn = active.every((id) => this.stacks.get(id) === 0);
+      if (everyoneAllIn) {
+        this.allInSnapshot = {
+          boardAtAllIn: [...this.board],
+          participants: active.map((id) => ({ id, holeCards: this.holeCards.get(id) })),
+        };
+      }
     }
 
     this.streetIndex += 1;

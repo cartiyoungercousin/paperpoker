@@ -13,6 +13,13 @@ test('updateSettings resets state without starting a hand automatically', () => 
   assert.ok(marcusSeat === undefined || marcusSeat > 0);
 });
 
+test('updateSettings resets isPaused so a new game never starts frozen', () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  game.isPaused = true; // simulates leaving to the home screen mid-hand
+  game.updateSettings({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  assert.equal(game.isPaused, false);
+});
+
 test('new tables assign distinct color classes to players', () => {
   const game = new TableGame({ numPlayers: 4, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
   const colors = game.players.map((player) => player.colorClass);

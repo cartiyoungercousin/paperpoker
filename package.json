@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Free-play Texas Hold'em with customizable bots and EV/quant stats.",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "test": "node --test",
     "start": "node server.js",

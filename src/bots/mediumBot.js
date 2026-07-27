@@ -1,6 +1,6 @@
 /**
  * Medium Bot Logic:
- * - Plays "tight-passive" — selective with hands, but plays them well.
+ * - Plays "tight-passive": selective with hands, but plays them well.
  * - Pre-flop: only plays pairs, high cards (10+), and suited connectors.
  * - Post-flop: bets/raises with top pair or better, checks/calls with draws.
  * - Occasionally bluffs (15%).

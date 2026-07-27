@@ -2,782 +2,472 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
-import { Hand } from "./src/hand.js";
-import { getEasyAction } from "./src/bots/easyBot.js";
-import { getMediumAction } from "./src/bots/mediumBot.js";
-import { getHardAction } from "./src/bots/hardBot.js";
-import { getExpertAction } from "./src/bots/expertBot.js";
-import { describeScore, bestHand } from "./src/handEvaluator.js";
-import { rankName } from "./src/deck.js";
-import { computeAllInEquity, estimateEquityVsUnknown } from "./src/equity.js";
+import { TableGame } from "./src/tableGame.js";
+import { buildHandAnalysis } from "./src/handAnalysis.js";
+import { SessionRegistry } from "./src/sessionRegistry.js";
+import { parseCookies, serializeCookie } from "./src/cookies.js";
+import { openDb } from "./src/db.js";
+import * as auth from "./src/auth.js";
+import { getLeaderboard } from "./src/leaderboard.js";
+import { rankForXp } from "./src/rankTiers.js";
+import { RANKED_FIXED_SETTINGS, tournamentLengthForKey } from "./src/rankedConfig.js";
+import { claimDailyReward, hasUnclaimedDailyReward } from "./src/coins.js";
+import { getCatalogForUser, unlockCosmetic, equipCosmetic } from "./src/cosmetics.js";
+import { getDashboardStats } from "./src/analytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+// Required for req.secure/req.ip to reflect the real client (via
+// X-Forwarded-Proto/X-Forwarded-For) once this sits behind a reverse proxy
+// or load balancer in production, rather than the proxy's own local
+// connection - both the Secure cookie flag below and the login rate
+// limiter's IP-based key depend on this being accurate.
+app.set("trust proxy", 1);
 const server = http.createServer(app);
 const io = new Server(server);
 
+const SESSION_COOKIE = "ppSession";
+const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days, in seconds
+const AUTH_COOKIE = "ppAuth";
+// Only mark cookies Secure (HTTPS-only) once actually deployed - a local
+// http://localhost dev server would otherwise never receive them back from
+// the browser at all, breaking login during development.
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+// Merely importing this module (as every test/*.test.js file does, to reuse
+// TableGame/buildHandAnalysis) would otherwise create a real sqlite file on
+// disk as a side effect - node --test sets NODE_TEST_CONTEXT itself, so use
+// an in-memory db by default there instead, unless a real path is given
+// explicitly (PAPERPOKER_DB_PATH is how the manual/browser verification runs
+// point this at a disposable file instead of the real dev database).
+const DB_PATH = process.env.PAPERPOKER_DB_PATH
+  || (process.env.NODE_TEST_CONTEXT ? ":memory:" : path.join(__dirname, "data", "paperpoker.sqlite"));
+const db = openDb(DB_PATH);
+
+function emailLooksValid(email) {
+  return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Every visitor gets a long-lived, httpOnly session id up front - this is
+// what lets each browser get its own isolated TableGame instead of everyone
+// colliding in one global game (see SessionRegistry). Set here, on the plain
+// HTTP response for the page load itself, so it's already present by the
+// time the page's script opens its socket.io connection.
+app.use((req, res, next) => {
+  const cookies = parseCookies(req.headers.cookie);
+  if (!cookies[SESSION_COOKIE]) {
+    const sessionId = crypto.randomUUID();
+    res.setHeader("Set-Cookie", serializeCookie(SESSION_COOKIE, sessionId, { maxAge: SESSION_MAX_AGE, secure: IS_PRODUCTION }));
+    req.ppSessionId = sessionId;
+  } else {
+    req.ppSessionId = cookies[SESSION_COOKIE];
+  }
+  next();
+});
+
 app.use(express.static(__dirname));
+app.use(express.json());
 
-const BOT_NAMES = [
-  "James", "Victoria", "Marcus", "Isabella",
-  "Sebastian", "Charlotte", "Julian", "Anastasia",
-];
-
-const STREETS_ORDER = ["preflop", "flop", "turn", "river"];
-const STREET_BOARD_LEN = { preflop: 0, flop: 3, turn: 4, river: 5 };
-
-class TableGame {
-  constructor(config = {}) {
-    const numBots = config.numPlayers !== undefined ? config.numPlayers - 1 : 5;
-    this.startingStack = config.startingStack || 1000;
-    this.smallBlind = config.smallBlind || 10;
-    this.bigBlind = config.bigBlind || 20;
-    this.minRaise = this.bigBlind;
-    this.difficulty = config.difficulty || 'easy';
-
-    this.players = [
-      { id: "You", stack: this.startingStack, type: "human", seat: 0, colorClass: "color-0" },
-    ];
-    for (let i = 0; i < numBots; i++) {
-      this.players.push({
-        id: BOT_NAMES[i] || `Bot ${i + 1}`,
-        stack: this.startingStack,
-        type: "bot",
-        seat: i + 1,
-        colorClass: `color-${(i % 5) + 1}`,
-      });
-    }
-    this.assignSeats();
-
-    this.dealerIndex = 0;
-    this.hand = null;
-    this.handHistory = [];
-    this.dealingNewHand = false;
-    this.botTimeout = null;
-    this.gameStarted = false;
-    this.handCount = 0;
-    this.resetBalanceEachHand = false;
-    this.isPaused = false;
-    this.turboMode = false;
-
-    // Stats tracking
-    this.stats = {
-      handsPlayed: 0,
-      handsWon: 0,
-      totalWinnings: 0,
-      biggestPot: 0,
-      totalActions: 0,
-      vpipActions: 0,
-      vpipHands: 0,
-      totalBets: 0,
-      totalRaises: 0,
-      totalCalls: 0,
-      totalFolds: 0,
-      totalChecks: 0,
-      totalPotWon: 0,
-      totalInvested: 0,
-      netProfit: 0,
-      showdownsSeen: 0,
-      showdownsWon: 0,
-      showdownWinnings: 0,
-      nonShowdownWinnings: 0,
-      biggestWin: 0,
-      biggestLoss: 0,
-      currentStreak: 0,
-      pfrHands: 0,
-      threeBetHands: 0,
-      threeBetOpportunities: 0,
-      allInHandsTracked: 0,
-      cumulativeEVDollars: 0,
-      luckDollars: 0,
-    };
-    // Per-hand transient flags, reset at the start of each hand
-    this._humanVpipThisHand = false;
-    this._pfrCountedThisHand = false;
-    this._human3BetOppCountedThisHand = false;
-
-    // Structured per-hand log for export (CSV/JSON)
-    this.handLog = [];
-
-    // Parallel to balanceHistory: cumulative all-in-equity expected value,
-    // for the "EV line vs actual line" balance graph overlay. Only changes
-    // on hands that were tracked (went to an all-in before the river) -
-    // holds flat in between, same as a real poker tracker's EV graph.
-    this.evHistory = [{ hand: 0, ev: this.startingStack }];
-
-    // When the current session started, for hands/hour tracking
-    this.sessionStart = Date.now();
-
-    // Track last action for each player for display
-    this.lastActions = {};
-
-    // Structured per-street/per-action log for the current hand, used by the
-    // hand replayer (requestHandAnalysis). Reset at the start of each hand.
-    this.currentHandActions = [];
-    this.streetSnapshots = [];
-
-    // Balance history for live graph (tracks after every action/round)
-    this.balanceHistory = [{ hand: 0, balance: this.startingStack }];
-
-    // Bot customization settings
-    this.botCustomization = {
-      personality: 'TAG',
-      aggression: 50,
-      bluffFreq: 0.15,
-      foldTo3bet: 0.65,
-    };
+app.post("/api/signup", async (req, res) => {
+  if (auth.isSignupRateLimited(req.ip)) {
+    return res.status(429).json({ error: "Too many accounts created from this network recently. Please try again later." });
+  }
+  const { email, password, displayName } = req.body || {};
+  if (!emailLooksValid(email)) {
+    return res.status(400).json({ error: "Please enter a valid email address." });
+  }
+  if (typeof password !== "string" || password.length < 8) {
+    return res.status(400).json({ error: "Password must be at least 8 characters." });
+  }
+  const trimmedName = typeof displayName === "string" ? displayName.trim() : "";
+  if (!trimmedName || trimmedName.length > 24) {
+    return res.status(400).json({ error: "Display name must be 1-24 characters." });
+  }
+  auth.recordSignupAttempt(req.ip);
+  if (auth.findUserByEmail(db, email)) {
+    return res.status(409).json({ error: "An account with that email already exists." });
   }
 
-  assignSeats() {
-    this.players.forEach((player, idx) => {
-      player.seat = idx;
-    });
+  const { hash, salt } = await auth.hashPassword(password);
+  let userId;
+  try {
+    userId = auth.createUser(db, { email, displayName: trimmedName, passwordHash: hash, passwordSalt: salt });
+  } catch (err) {
+    return res.status(409).json({ error: "An account with that email already exists." });
   }
 
-  // Total chips in the pot right now: everything locked in from completed
-  // streets, plus whatever's been contributed so far on the current street.
-  _potTotal() {
-    if (!this.hand) return 0;
-    let pot = 0;
-    for (const v of this.hand.totalContributed.values()) pot += v;
-    if (this.hand.currentRound) {
-      for (const p of this.hand.currentRound.players) pot += p.contributed;
-    }
-    return pot;
+  const { token, expiresAt } = auth.issueSession(db, userId);
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
+  res.json({ user: auth.toPublicUser(auth.findUserById(db, userId)), hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, userId) });
+});
+
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body || {};
+  if (!emailLooksValid(email) || typeof password !== "string") {
+    return res.status(400).json({ error: "Invalid email or password." });
   }
 
-  // Records one action into the structured per-hand log (for the hand
-  // replayer) and backfills a street snapshot for every street the action
-  // just opened. Call this AFTER hand.applyAction() succeeds, passing the
-  // street the action was actually taken on (captured before applying it).
-  // Backfilling matters because an all-in can cascade straight from preflop
-  // to the river in one synchronous call, skipping the flop/turn transitions
-  // that would normally trigger a snapshot - once everyone's all-in no more
-  // betting happens, so the pot total is identical across all those streets,
-  // making it safe to reuse the current pot total for each backfilled entry.
-  _recordAction(playerId, action, amount, prevStreet) {
-    this.currentHandActions.push({ actor: playerId, action, amount: amount || 0, street: prevStreet });
-    const newStreet = this.hand.currentStreetName();
-    if (newStreet !== prevStreet) {
-      const potNow = this._potTotal();
-      const prevIdx = STREETS_ORDER.indexOf(prevStreet);
-      const newIdx = STREETS_ORDER.indexOf(newStreet);
-      for (let idx = prevIdx + 1; idx <= newIdx; idx++) {
-        const streetName = STREETS_ORDER[idx];
-        this.streetSnapshots.push({
-          street: streetName,
-          board: this.hand.board.slice(0, STREET_BOARD_LEN[streetName]),
-          potAtStreetStart: potNow,
-        });
-      }
-    }
+  const rateLimitKey = `${email.toLowerCase()}:${req.ip}`;
+  if (auth.isRateLimited(rateLimitKey)) {
+    return res.status(429).json({ error: "Too many attempts. Try again in a few minutes." });
   }
 
-  getState() {
-    if (!this.hand) {
-      return {
-        gameStarted: this.gameStarted,
-        handCount: this.handCount,
-        stats: this.stats,
-        resetBalanceEachHand: this.resetBalanceEachHand, turboMode: this.turboMode,
-        players: this.players.map(p => ({
-          id: p.id, type: p.type, seat: p.seat, stack: p.stack, colorClass: p.colorClass,
-          contributed: 0, folded: false, holeCards: [], active: false,
-        })),
-  street: "", board: [], pot: 0, actingId: null,
-        legalActions: null, complete: false, results: null,
-        handHistory: this.handHistory,
-        smallBlind: this.smallBlind, bigBlind: this.bigBlind,
-        sbId: null, bbId: null,
-        isPaused: !!this.isPaused,
-        yourHandDescription: "",
-        sessionStart: this.sessionStart || null,
-      };
-    }
-
-    const playerStates = this.players.map((p) => {
-      const isFolded = this.hand.folded.has(p.id);
-      const stack = this.hand.stacks.get(p.id) ?? p.stack;
-      const contributed = this.hand.totalContributed.get(p.id) ?? 0;
-      let hole = null;
-      if (this.hand.complete || p.id === "You") {
-        hole = this.hand.holeCards.get(p.id) || [];
-      } else {
-        hole = [{ rank: 0, suit: "" }, { rank: 0, suit: "" }];
-      }
-      return {
-        id: p.id, type: p.type, seat: p.seat, stack, contributed, colorClass: p.colorClass,
-        folded: isFolded, isDealer: false,
-        holeCards: hole, active: this.hand.actingPlayerId() === p.id && !this.hand.complete,
-      };
-    });
-
-    const pot = this._potTotal();
-
-    let legalActions = null;
-    let actingId = this.hand.actingPlayerId();
-    const humanId = this.players.find(p => p.type === "human")?.id;
-    if (humanId && actingId === humanId && !this.hand.complete) {
-      const leg = this.hand.legalActions(humanId);
-      if (leg) {
-        legalActions = {
-          fold: leg.fold, check: leg.check, call: leg.call,
-          callAmount: leg.callAmount, bet: leg.bet, raise: leg.raise,
-          minRaiseTo: leg.minRaiseTo, maxRaiseTo: leg.maxRaiseTo,
-        };
-      }
-    }
-
-    let results = null;
-    if (this.hand.complete && this.hand.result) {
-      results = {
-        payouts: Object.fromEntries(this.hand.result.payouts),
-        showdown: this.hand.result.showdown ? {
-          results: this.hand.result.showdown.results.map(r => ({
-            id: r.id, description: describeScore(r.score), score: r.score,
-          })),
-        } : null,
-      };
-    }
-
-    let yourHandDescription = "";
-    if (humanId) {
-      const hole = this.hand.holeCards.get(humanId) || [];
-      if (hole.length === 2 && this.hand.board.length >= 3) {
-        try {
-          const best = bestHand([...hole, ...this.hand.board]);
-          yourHandDescription = describeScore(best.score);
-        } catch (e) {}
-      }
-    }
-
-    return {
-      street: this.hand.currentStreetName(), board: this.hand.board, pot,
-      players: playerStates, actingId, legalActions, complete: this.hand.complete,
-      results, handHistory: this.handHistory, gameStarted: this.gameStarted,
-      handCount: this.handCount, smallBlind: this.smallBlind, bigBlind: this.bigBlind,
-      sbId: this.hand.sbId, bbId: this.hand.bbId,
-      stats: this.stats, resetBalanceEachHand: this.resetBalanceEachHand, turboMode: this.turboMode,
-      lastActions: this.lastActions,
-      balanceHistory: this.balanceHistory,
-      evHistory: this.evHistory,
-      isPaused: !!this.isPaused,
-      yourHandDescription,
-      sessionStart: this.sessionStart || null,
-    };
+  const row = auth.findUserByEmail(db, email);
+  const valid = row ? await auth.verifyPassword(password, row.password_salt, row.password_hash) : false;
+  if (!row || !valid) {
+    auth.recordLoginFailure(rateLimitKey);
+    // Deliberately the same generic message either way - never reveal
+    // whether the email or the password was the one that didn't match.
+    return res.status(401).json({ error: "Invalid email or password." });
   }
+  auth.clearLoginAttempts(rateLimitKey);
 
-  startNewHand() {
-    if (this.botTimeout) clearTimeout(this.botTimeout);
-    this._humanVpipThisHand = false;
-    this._pfrCountedThisHand = false;
-    this._human3BetOppCountedThisHand = false;
+  const { token, expiresAt } = auth.issueSession(db, row.id);
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
+  res.json({ user: auth.toPublicUser(row), hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, row.id) });
+});
 
-    if (this.resetBalanceEachHand) {
-      for (const p of this.players) p.stack = this.startingStack;
-    } else {
-      for (const p of this.players) {
-        if (p.stack <= 0) p.stack = this.startingStack;
-      }
-    }
+app.post("/api/logout", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  auth.destroySession(db, cookies[AUTH_COOKIE]);
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION }));
+  res.json({ ok: true });
+});
 
-    this.handCount++;
-    const handPlayers = [...this.players]
-      .filter(p => p.stack > 0)
-      .sort((a, b) => a.seat - b.seat)
-      .map(p => ({ id: p.id, stack: p.stack }));
-
-    if (handPlayers.length < 2) {
-      for (const p of this.players) p.stack = this.startingStack;
-      const resetPlayers = [...this.players].sort((a, b) => a.seat - b.seat).map(p => ({ id: p.id, stack: p.stack }));
-      this.hand = new Hand({ players: resetPlayers, minRaise: this.minRaise, smallBlind: this.smallBlind, bigBlind: this.bigBlind, dealerIndex: this.dealerIndex });
-    } else {
-      this.hand = new Hand({ players: handPlayers, minRaise: this.minRaise, smallBlind: this.smallBlind, bigBlind: this.bigBlind, dealerIndex: this.dealerIndex });
-    }
-
-    this.handHistory.push(`--- Hand #${this.handCount} ---`);
-    this.handHistory.push(`${this.hand.sbId} posts small blind ${this.smallBlind} (SB)`);
-    this.handHistory.push(`${this.hand.bbId} posts big blind ${this.bigBlind} (BB)`);
-    this.dealingNewHand = false;
-    this.lastActions = {};
-
-    this.currentHandActions = [];
-    this.streetSnapshots = [{ street: "preflop", board: [], potAtStreetStart: this._potTotal() }];
-
-    this.checkBotTurn();
-  }
-
-  applyPlayerAction(playerId, action, amount) {
-    if (!this.hand || this.hand.complete || this.isPaused) return false;
-    if (this.hand.actingPlayerId() !== playerId) return false;
-
-    const prevStreet = this.hand.currentStreetName();
-    const priorRaiseCount = this.hand.currentRound ? this.hand.currentRound.raiseCount : 0;
-    try {
-      this.hand.applyAction(playerId, action, amount);
-      const amtStr = amount ? ` ${amount}` : "";
-      // Add street marker if street changed
-      const newStreet = this.hand.currentStreetName();
-      if (newStreet !== prevStreet) {
-        this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
-      }
-      this.handHistory.push(`${playerId}: ${action}${amtStr}`);
-      // Track last action for display
-      this.lastActions[playerId] = { action, amount: amount || 0, street: newStreet };
-      this._recordAction(playerId, action, amount, prevStreet);
-
-      this.stats.totalActions++;
-      if (action === "call") { this.stats.vpipActions++; this.stats.totalCalls++; }
-      else if (action === "bet") { this.stats.vpipActions++; this.stats.totalBets++; }
-      else if (action === "raise") { this.stats.vpipActions++; this.stats.totalRaises++; }
-      else if (action === "fold") this.stats.totalFolds++;
-      else if (action === "check") this.stats.totalChecks++;
-
-      // True per-hand VPIP: did "You" voluntarily put money in preflop (excludes checking the BB option)
-      if (playerId === "You" && prevStreet === "preflop" && (action === "call" || action === "bet" || action === "raise")) {
-        this._humanVpipThisHand = true;
-      }
-
-      // Preflop 3-bet / PFR tracking, based on the raise count BEFORE this action was applied
-      if (playerId === "You" && prevStreet === "preflop") {
-        if (priorRaiseCount === 1 && !this._human3BetOppCountedThisHand) {
-          this._human3BetOppCountedThisHand = true;
-          this.stats.threeBetOpportunities++;
-        }
-        if (action === "raise") {
-          if (priorRaiseCount === 0 && !this._pfrCountedThisHand) {
-            this._pfrCountedThisHand = true;
-            this.stats.pfrHands++;
-          } else if (priorRaiseCount === 1) {
-            this.stats.threeBetHands++;
-          }
-        }
-      }
-
-      for (const p of this.players) {
-        if (this.hand.stacks.has(p.id)) p.stack = this.hand.stacks.get(p.id);
-      }
-
-      if (this.hand.complete) this.handleHandComplete();
-      else this.checkBotTurn();
-      return true;
-    } catch (err) {
-      console.error("Action error:", err.message);
-      return false;
-    }
-  }
-
-  trackBalance() {
-    const you = this.players.find(p => p.id === "You");
-    if (you) {
-      this.balanceHistory.push({ hand: this.handCount, balance: you.stack });
-    }
-    // Pushed every hand (not just all-in-tracked ones) so the EV line holds
-    // flat between tracked hands and its x-axis stays aligned with balanceHistory.
-    this.evHistory.push({ hand: this.handCount, ev: this.startingStack + this.stats.cumulativeEVDollars });
-  }
-
-  // Track balance after every hand completes (called in handleHandComplete)
-
-  checkBotTurn() {
-    if (!this.hand || this.hand.complete || this.isPaused) return;
-    const actingId = this.hand.actingPlayerId();
-    const actingPlayer = this.players.find(p => p.id === actingId);
-    if (!actingPlayer || actingPlayer.type !== "bot") return;
-
-    // Emit botTurn event so client can play a sound
-    io.emit("botTurn", { playerId: actingId });
-
-    // Delay between 1-2 seconds for smooth bot play (50-150ms in turbo mode)
-    const delay = this.turboMode ? 50 + Math.floor(Math.random() * 100) : 1000 + Math.floor(Math.random() * 1000);
-    this._lastBotDelay = delay; // exposed for tests
-
-    this.botTimeout = setTimeout(() => {
-      if (!this.hand || this.hand.complete || this.isPaused) return;
-      if (this.hand.actingPlayerId() !== actingId) return;
-
-      // Choose bot decision function based on difficulty
-      let getAction;
-      if (this.difficulty === 'hard') {
-        getAction = getHardAction;
-      } else if (this.difficulty === 'medium') {
-        getAction = getMediumAction;
-      } else if (this.difficulty === 'expert') {
-        getAction = getExpertAction;
-      } else {
-        getAction = getEasyAction;
-      }
-
-      let decision;
-      if (this.difficulty === 'expert') {
-        decision = getAction(actingId, this.hand, this.botCustomization);
-      } else {
-        decision = getAction(actingId, this.hand);
-      }
-      if (!decision) return;
-
-      const prevStreet = this.hand.currentStreetName();
-      try {
-        this.hand.applyAction(actingId, decision.action, decision.amount);
-        const amtStr = decision.amount ? ` ${decision.amount}` : "";
-        const newStreet = this.hand.currentStreetName();
-        if (newStreet !== prevStreet) {
-          this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
-        }
-        this.handHistory.push(`${actingId}: ${decision.action}${amtStr}`);
-        this.lastActions[actingId] = { action: decision.action, amount: decision.amount || 0, street: newStreet };
-        this._recordAction(actingId, decision.action, decision.amount, prevStreet);
-        for (const p of this.players) {
-          if (this.hand.stacks.has(p.id)) p.stack = this.hand.stacks.get(p.id);
-        }
-        io.emit("gameState", this.getState());
-        if (this.hand.complete) this.handleHandComplete();
-        else this.checkBotTurn();
-      } catch (err) {
-        console.error("Bot error:", err);
-        try {
-          const leg = this.hand.legalActions(actingId);
-          const fallback = leg.check ? "check" : "fold";
-          this.hand.applyAction(actingId, fallback);
-          this.handHistory.push(`${actingId}: ${fallback} (fb)`);
-          this.lastActions[actingId] = { action: fallback, amount: 0, street: this.hand.currentStreetName() };
-          this._recordAction(actingId, fallback, 0, prevStreet);
-          io.emit("gameState", this.getState());
-          if (this.hand.complete) this.handleHandComplete();
-          else this.checkBotTurn();
-        } catch (e2) { console.error("Fallback error:", e2); }
-      }
-    }, delay);
-  }
-
-  handleHandComplete() {
-    if (!this.hand || !this.hand.result) return;
-    this.stats.handsPlayed++;
-    if (this._humanVpipThisHand) this.stats.vpipHands++;
-
-    let youWon = false;
-    for (const [id, payout] of this.hand.result.payouts) {
-      const p = this.players.find(pl => pl.id === id);
-      if (p) {
-        p.stack += payout;
-        if (payout > 0) {
-          this.handHistory.push(`${id} wins ${payout}`);
-          if (id === "You") {
-            youWon = true;
-            this.stats.totalWinnings += payout;
-            this.stats.totalPotWon += payout;
-            if (this.hand.result.showdown) this.stats.showdownWinnings += payout;
-            else this.stats.nonShowdownWinnings += payout;
-          }
-        }
-      }
-    }
-    if (youWon) this.stats.handsWon++;
-
-    if (this.hand.result.pots) {
-      const totalPot = this.hand.result.pots.reduce((s, pot) => s + pot.amount, 0);
-      if (totalPot > this.stats.biggestPot) this.stats.biggestPot = totalPot;
-    }
-
-    const youDealtIn = this.hand.order.includes("You");
-    if (youDealtIn && this.hand.result.showdown && !this.hand.folded.has("You")) {
-      this.stats.showdownsSeen++;
-      if ((this.hand.result.payouts.get("You") || 0) > 0) this.stats.showdownsWon++;
-    }
-
-    // Track total invested: actual $ "You" contributed to this hand's pots
-    // (not a stack-deficit heuristic, which breaks under resetBalanceEachHand)
-    const youContributed = this.hand.totalContributed.get("You") || 0;
-    const youPayout = this.hand.result.payouts.get("You") || 0;
-    this.stats.totalInvested += youContributed;
-    this.stats.netProfit = this.stats.totalWinnings - this.stats.totalInvested;
-
-    // Biggest win/loss and current streak (0 net - e.g. "You" wasn't dealt into this hand - leaves these unchanged)
-    const youNetThisHand = youPayout - youContributed;
-    if (youNetThisHand > this.stats.biggestWin) this.stats.biggestWin = youNetThisHand;
-    if (youNetThisHand < this.stats.biggestLoss) this.stats.biggestLoss = youNetThisHand;
-    if (youNetThisHand > 0) this.stats.currentStreak = this.stats.currentStreak >= 0 ? this.stats.currentStreak + 1 : 1;
-    else if (youNetThisHand < 0) this.stats.currentStreak = this.stats.currentStreak <= 0 ? this.stats.currentStreak - 1 : -1;
-
-    // All-In Equity / luck-adjusted EV: only defined for hands where everyone
-    // still live got all-in before the river (the remaining runout was pure
-    // chance) and "You" were one of the participants.
-    let allInEVThisHand = null;
-    if (youDealtIn && this.hand.allInSnapshot) {
-      const equity = computeAllInEquity(this.hand.allInSnapshot);
-      const youEquity = equity["You"];
-      if (youEquity !== undefined) {
-        const potEligible = (this.hand.result.pots || [])
-          .filter((pot) => pot.eligiblePlayerIds.includes("You"))
-          .reduce((s, pot) => s + pot.amount, 0);
-        allInEVThisHand = youEquity * potEligible - youContributed;
-        this.stats.allInHandsTracked++;
-        this.stats.cumulativeEVDollars += allInEVThisHand;
-        this.stats.luckDollars += youNetThisHand - allInEVThisHand;
-      }
-    }
-
-    // Structured per-hand record for export (CSV/JSON)
-    if (youDealtIn) {
-      const position = this.hand.sbId === "You" ? "SB" : this.hand.bbId === "You" ? "BB" :
-        (this.hand.order[this.hand.dealerIndex] === "You" ? "BTN" : "other");
-      let showdownDescription = null;
-      if (this.hand.result.showdown) {
-        const r = this.hand.result.showdown.results.find(r => r.id === "You");
-        if (r) showdownDescription = describeScore(r.score);
-      }
-      this.handLog.push({
-        handNumber: this.handCount,
-        timestamp: Date.now(),
-        position,
-        holeCards: (this.hand.holeCards.get("You") || []).map(c => `${rankName(c.rank)}${c.suit}`),
-        board: this.hand.board.map(c => `${rankName(c.rank)}${c.suit}`),
-        contributed: youContributed,
-        payout: youPayout,
-        net: youNetThisHand,
-        wentToShowdown: !!(this.hand.result.showdown && !this.hand.folded.has("You")),
-        showdownDescription,
-        potSize: this.hand.result.pots ? this.hand.result.pots.reduce((s, p) => s + p.amount, 0) : 0,
-        numPlayersDealt: this.hand.order.length,
-        allInEV: allInEVThisHand,
-      });
-    }
-
-    this.trackBalance();
-    // Emit ripple effect event to clients
-    io.emit("handComplete", { youWon });
-    this.dealerIndex = (this.dealerIndex + 1) % this.players.length;
-    io.emit("gameState", this.getState());
-  }
-
-  updateSettings(config) {
-    const numBots = config.numPlayers ? config.numPlayers - 1 : this.players.length - 1;
-    this.startingStack = config.startingStack || this.startingStack;
-    this.smallBlind = config.smallBlind || this.smallBlind;
-    this.bigBlind = config.bigBlind || this.bigBlind;
-    this.minRaise = this.bigBlind;
-    if (config.difficulty) this.difficulty = config.difficulty;
-
-    // Apply bot customization if provided
-    if (config.botCustomization) {
-      this.botCustomization = {
-        ...this.botCustomization,
-        ...config.botCustomization,
-      };
-    }
-
-    // Reset balance history on new settings
-    this.balanceHistory = [{ hand: 0, balance: this.startingStack }];
-    this.evHistory = [{ hand: 0, ev: this.startingStack }];
-
-    if (this.botTimeout) clearTimeout(this.botTimeout);
-    this.botTimeout = null;
-
-    this.players = [
-      { id: "You", stack: this.startingStack, type: "human", seat: 0, colorClass: "color-0" },
-    ];
-    for (let i = 0; i < numBots; i++) {
-      this.players.push({
-        id: BOT_NAMES[i] || `Bot ${i + 1}`,
-        stack: this.startingStack,
-        type: "bot",
-        seat: i + 1,
-        colorClass: `color-${(i % 5) + 1}`,
-      });
-    }
-    this.assignSeats();
-
-    this.hand = null;
-    this.handHistory = [];
-    this.handCount = 0;
-    this.gameStarted = false;
-    this.dealingNewHand = false;
-    this.stats = {
-      handsPlayed: 0, handsWon: 0, totalWinnings: 0, biggestPot: 0,
-      totalActions: 0, vpipActions: 0, vpipHands: 0, totalBets: 0, totalRaises: 0,
-      totalCalls: 0, totalFolds: 0, totalChecks: 0, totalPotWon: 0, totalInvested: 0,
-      netProfit: 0,
-      showdownsSeen: 0, showdownsWon: 0, showdownWinnings: 0, nonShowdownWinnings: 0,
-      biggestWin: 0, biggestLoss: 0, currentStreak: 0,
-      pfrHands: 0, threeBetHands: 0, threeBetOpportunities: 0,
-      allInHandsTracked: 0, cumulativeEVDollars: 0, luckDollars: 0,
-    };
-    this._humanVpipThisHand = false;
-    this._pfrCountedThisHand = false;
-    this._human3BetOppCountedThisHand = false;
-    this.handLog = [];
-    this.currentHandActions = [];
-    this.streetSnapshots = [];
-    this.sessionStart = Date.now();
-    this.dealerIndex = 0;
-    this.isPaused = false;
-  }
-}
-
-// Builds the payload for the hand replayer/analyzer: "You"'s hole cards, a
-// best-hand description, and one entry per street with that street's board,
-// the actions taken on it, and "You"'s equity at that point.
-//
-// Equity is computed two different ways depending on what's knowable:
-//   - Exact (via computeAllInEquity): for streets at/after a real all-in
-//     "You" were part of - hole cards are effectively revealed at that point,
-//     so exact/Monte Carlo enumeration against the KNOWN opponent hands is
-//     both possible and strictly more accurate.
-//   - Estimated (via estimateEquityVsUnknown): everywhere else - opponents'
-//     hole cards are genuinely unknown, so this is a Monte Carlo estimate
-//     against however many opponents were still live at that street.
-// No equity is computed for streets after "You" folded (nothing to compute -
-// "You" were no longer eligible to win).
-function buildHandAnalysis(tableGame) {
-  const hand = tableGame.hand;
-  if (!hand || !hand.complete) return null;
-
-  const heroHoleCards = hand.holeCards.get("You") || [];
-  let yourBestHandDescription = "";
-  if (heroHoleCards.length === 2 && hand.board.length >= 3) {
-    try {
-      const best = bestHand([...heroHoleCards, ...hand.board]);
-      yourBestHandDescription = describeScore(best.score);
-    } catch (e) {}
-  }
-
-  const allInSnap = hand.allInSnapshot;
-  const allInCoversYou = !!(allInSnap && allInSnap.participants.some((p) => p.id === "You"));
-
-  const youFoldAction = tableGame.currentHandActions.find((a) => a.actor === "You" && a.action === "fold");
-  const youFoldStreetIdx = youFoldAction ? STREETS_ORDER.indexOf(youFoldAction.street) : Infinity;
-
-  const streetSnapshots = tableGame.streetSnapshots.map((snap) => {
-    const streetIdx = STREETS_ORDER.indexOf(snap.street);
-    const actions = tableGame.currentHandActions.filter((a) => a.street === snap.street);
-
-    let equityAtStreet = null;
-    let equityIsExact = false;
-    if (heroHoleCards.length === 2 && streetIdx <= youFoldStreetIdx) {
-      if (allInCoversYou && snap.board.length >= allInSnap.boardAtAllIn.length) {
-        const equity = computeAllInEquity({ participants: allInSnap.participants, boardAtAllIn: snap.board });
-        equityAtStreet = equity["You"] ?? null;
-        equityIsExact = true;
-      } else {
-        const foldedBefore = new Set(
-          tableGame.currentHandActions
-            .filter((a) => a.action === "fold" && STREETS_ORDER.indexOf(a.street) < streetIdx)
-            .map((a) => a.actor)
-        );
-        const numOpponents = hand.order.filter((id) => id !== "You" && !foldedBefore.has(id)).length;
-        equityAtStreet = estimateEquityVsUnknown({ heroHoleCards, board: snap.board, numOpponents });
-        equityIsExact = false;
-      }
-    }
-
-    return {
-      street: snap.street,
-      board: snap.board,
-      potAtStreetStart: snap.potAtStreetStart,
-      actions,
-      equityAtStreet,
-      equityIsExact,
-    };
+app.get("/api/me", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  res.json({
+    user: auth.toPublicUser(user),
+    hasUnclaimedDailyReward: user ? hasUnclaimedDailyReward(db, user.id) : false,
   });
+});
 
-  return {
-    handCount: tableGame.handCount,
-    board: hand.board,
-    holeCards: heroHoleCards,
-    yourBestHandDescription,
-    totalContributed: Object.fromEntries(hand.totalContributed),
-    order: hand.order,
-    pots: hand.result ? hand.result.pots : [],
-    stacks: Object.fromEntries(hand.stacks),
-    payouts: hand.result ? Object.fromEntries(hand.result.payouts) : {},
-    streetSnapshots,
-  };
-}
+// Claims today's daily-login coin reward, if it hasn't been claimed yet
+// today - server computes and validates everything (the streak, the amount,
+// whether it's actually a new day), never trusts a client-sent claim.
+app.post("/api/claim-daily-reward", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  const result = claimDailyReward(db, user.id);
+  if (!result) return res.status(404).json({ error: "User not found." });
+  res.json(result);
+});
 
-export { TableGame, buildHandAnalysis };
+// The cosmetics catalog annotated with this user's own owned/equipped state.
+// Guests get a 401 - the shop has nothing to show without an account to
+// track ownership against.
+app.get("/api/cosmetics", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  res.json(getCatalogForUser(db, user.id));
+});
 
-const tableGame = new TableGame();
+// Spends coins to unlock a cosmetic - server validates cost, ownership, and
+// balance itself; never trusts a client-sent claim of any of it.
+app.post("/api/cosmetics/unlock", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  const { category, key } = req.body || {};
+  if (category !== "cardBack" && category !== "feltColor") {
+    return res.status(400).json({ error: "Unknown cosmetic category." });
+  }
+  const result = unlockCosmetic(db, user.id, category, String(key || ""));
+  if (!result) return res.status(404).json({ error: "User not found." });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json(result);
+});
+
+// Equips an already-owned cosmetic.
+app.post("/api/cosmetics/equip", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  const { category, key } = req.body || {};
+  if (category !== "cardBack" && category !== "feltColor") {
+    return res.status(400).json({ error: "Unknown cosmetic category." });
+  }
+  const result = equipCosmetic(db, user.id, category, String(key || ""));
+  if (!result) return res.status(404).json({ error: "User not found." });
+  if (!result.ok) return res.status(400).json({ error: result.error });
+  res.json(result);
+});
+
+// A user's own profile - ranked-match stats only, per how it's scoped on the
+// client. No lookup-by-id yet (just "view your own"), but the shape here has
+// room to grow into that later without a breaking change.
+app.get("/api/profile", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  res.json({
+    displayName: user.display_name,
+    rank: rankForXp(user.total_xp),
+    totalXp: user.total_xp,
+    handsPlayed: user.hands_played,
+    handsWon: user.hands_won,
+    winPct: user.hands_played > 0 ? user.hands_won / user.hands_played : null,
+    hoursPlayed: user.ranked_seconds_played / 3600,
+    netProfit: user.net_profit,
+    biggestPot: user.biggest_pot,
+    biggestWin: user.biggest_win,
+    biggestLoss: user.biggest_loss,
+    showdownsSeen: user.showdowns_seen,
+    showdownsWon: user.showdowns_won,
+    wsdPct: user.showdowns_seen > 0 ? user.showdowns_won / user.showdowns_seen : null,
+  });
+});
+
+// Public - no auth needed to view who's on top, only to appear on it.
+app.get("/api/leaderboard", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  const period = req.query.period === "week" ? "week" : "all";
+  res.json(getLeaderboard(db, user ? user.id : null, 50, period));
+});
+
+// Internal-only growth/retention dashboard - never linked from the
+// player-facing app. Gated on the raw is_admin column (never exposed via
+// auth.toPublicUser, which deliberately strips it), resolved the same
+// never-trust-the-client way as every other session check here.
+app.get("/api/admin/stats", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user || !user.is_admin) return res.status(404).json({ error: "Not found." });
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 30));
+  res.json(getDashboardStats(db, days));
+});
+
+const registry = new SessionRegistry(io, db);
 
 io.on("connection", (socket) => {
-  console.log("Client connected:", socket.id);
+  const cookies = parseCookies(socket.handshake.headers.cookie);
+  let sessionId = cookies[SESSION_COOKIE];
+  if (!sessionId) {
+    // No cookie support (blocked, or a non-browser client) - fall back to an
+    // ephemeral per-socket session rather than failing outright. Degrades to
+    // "doesn't survive a refresh" instead of breaking.
+    sessionId = socket.id;
+    console.warn(`No ${SESSION_COOKIE} cookie on socket ${socket.id} - falling back to an ephemeral per-socket session (won't survive a page refresh).`);
+  }
+
+  console.log("Client connected:", socket.id, "session:", sessionId);
+  socket.join(sessionId);
+  const entry = registry.touch(sessionId, socket.id);
+  if (!entry) {
+    // Session cap hit (see SessionRegistry.MAX_SESSIONS) - refuse rather
+    // than creating unbounded state. A real browser session already has
+    // one (the cookie was set on the page load before this socket ever
+    // opened), so this only ever turns away abusive cookie-less connection
+    // spam, never a normal returning visitor.
+    socket.emit("fatalError", { message: "Server is at capacity - please try again shortly." });
+    socket.disconnect(true);
+    return;
+  }
+  const tableGame = entry.tableGame;
+
+  // Resolved once up front so later phases (ranked play, leaderboards) can
+  // read socket.data.user without re-parsing cookies - null for a logged-out
+  // visitor, inert until something actually branches on it.
+  const authCookies = parseCookies(socket.handshake.headers.cookie);
+  socket.data.user = auth.resolveSession(db, authCookies[AUTH_COOKIE]);
+  // Set once createRoom/joinRoom succeeds - null means "this socket is just
+  // playing its own solo session", not in a private room at all.
+  socket.data.roomCode = null;
+  socket.data.playerId = null;
+
   socket.emit("gameState", tableGame.getState());
   socket.emit("tableInfo", {
     smallBlind: tableGame.smallBlind, bigBlind: tableGame.bigBlind, minRaise: tableGame.minRaise,
   });
 
-  socket.on("playerAction", ({ action, amount }) => {
-    if (tableGame.applyPlayerAction("You", action, amount)) {
-      io.emit("gameState", tableGame.getState());
+  // Resolves which TableGame - and which seat within it - this socket's
+  // events currently apply to: its own solo session by default, or a shared
+  // room's TableGame once createRoom/joinRoom has succeeded.
+  function activeGame() {
+    if (socket.data.roomCode) {
+      const room = registry.getRoom(socket.data.roomCode);
+      return room ? room.tableGame : null;
     }
+    return tableGame;
+  }
+  function activePlayerId() {
+    return socket.data.roomCode ? socket.data.playerId : "You";
+  }
+  // Solo has no concept of a host to gate on - only room mode does.
+  function isHostOrSolo() {
+    return !socket.data.roomCode || registry.isRoomHost(socket.data.roomCode, sessionId);
+  }
+
+  socket.on("createRoom", (payload, ack) => {
+    try {
+      // userId set last so a client can never override it by sneaking its
+      // own "userId" field into payload - socket.data.user was resolved
+      // server-side from the auth cookie at connection time, never trusted
+      // from the client directly.
+      const result = registry.createRoom(sessionId, socket, { ...(payload || {}), userId: socket.data.user ? socket.data.user.id : null });
+      socket.data.roomCode = result.code;
+      socket.data.playerId = result.playerId;
+      if (typeof ack === "function") ack({ ok: true, ...result });
+    } catch (err) {
+      if (typeof ack === "function") ack({ ok: false, error: err.message });
+    }
+  });
+
+  socket.on("joinRoom", (payload, ack) => {
+    try {
+      const code = ((payload && payload.code) || "").toUpperCase().trim();
+      const result = registry.joinRoom(sessionId, socket, code, { ...(payload || {}), userId: socket.data.user ? socket.data.user.id : null });
+      socket.data.roomCode = result.code;
+      socket.data.playerId = result.playerId;
+      if (typeof ack === "function") ack({ ok: true, ...result });
+    } catch (err) {
+      if (typeof ack === "function") ack({ ok: false, error: err.message });
+    }
+  });
+
+  socket.on("leaveRoom", () => {
+    if (!socket.data.roomCode) return;
+    registry.removeRoomSocket(socket.data.roomCode, socket.id);
+    socket.leave("room:" + socket.data.roomCode);
+    socket.data.roomCode = null;
+    socket.data.playerId = null;
+    socket.emit("gameState", tableGame.getState());
+  });
+
+  socket.on("playerAction", ({ action, amount }) => {
+    const tg = activeGame();
+    if (!tg) return;
+    tg.applyPlayerAction(activePlayerId(), action, amount);
   });
 
   socket.on("nextHand", () => {
-    tableGame.startNewHand();
-    io.emit("gameState", tableGame.getState());
+    const tg = activeGame();
+    if (!tg) return;
+    tg.startNewHand();
   });
 
-  // Bot customization
+  // Bot customization - meaningless in room mode (no bots), harmless no-op there.
   socket.on("updateBotCustomization", (customization) => {
-    if (customization) {
-      tableGame.botCustomization = {
-        ...tableGame.botCustomization,
-        ...customization,
-      };
-    }
+    const tg = activeGame();
+    if (!tg) return;
+    tg.updateBotCustomization(customization);
   });
 
-  // Hand analysis request: return hand data for analysis
+  // Hand analysis request: return hand data for analysis. Solo-only for now -
+  // buildHandAnalysis() is hardcoded to "You" throughout, so it isn't
+  // meaningful for a room's real, differently-identified players; the client
+  // doesn't offer the Hand Replay entry point while in a room.
   socket.on("requestHandAnalysis", () => {
+    if (socket.data.roomCode) return;
     const analysis = buildHandAnalysis(tableGame);
     if (analysis) socket.emit("handAnalysis", analysis);
   });
 
   socket.on("requestExport", () => {
+    if (socket.data.roomCode) return;
     socket.emit("exportData", { handLog: tableGame.handLog, stats: tableGame.stats });
   });
 
   socket.on("startGame", () => {
-    tableGame.isPaused = false;
-    tableGame.gameStarted = true;
-    tableGame.startNewHand();
-    io.emit("gameState", tableGame.getState());
+    const tg = activeGame();
+    if (!tg) return;
+    if (socket.data.roomCode) {
+      if (!isHostOrSolo()) return;
+      tg.startGame();
+      return;
+    }
+    tg.startGame();
   });
 
   socket.on("setResetBalance", ({ reset }) => {
-    tableGame.resetBalanceEachHand = reset;
+    const tg = activeGame();
+    if (!tg) return;
+    tg.setResetBalanceEachHand(reset);
   });
 
   socket.on("setTurboMode", ({ turbo }) => {
-    tableGame.turboMode = !!turbo;
-    io.emit("gameState", tableGame.getState());
+    const tg = activeGame();
+    if (!tg) return;
+    tg.setTurboMode(turbo);
   });
 
+  // Pause is host-only in a room - unlike solo, freezing the table affects
+  // several real people at once, so it's a deliberate "whole table's on
+  // hold" tool rather than something any seated player can unilaterally do.
   socket.on("pauseGame", () => {
-    tableGame.isPaused = true;
-    if (tableGame.botTimeout) clearTimeout(tableGame.botTimeout);
-    io.emit("pauseGame");
-    io.emit("gameState", tableGame.getState());
+    const tg = activeGame();
+    if (!tg || !isHostOrSolo()) return;
+    tg.setPaused(true);
   });
 
   socket.on("resumeGame", () => {
-    tableGame.isPaused = false;
-    tableGame.checkBotTurn();
-    io.emit("resumeGame");
-    io.emit("gameState", tableGame.getState());
+    const tg = activeGame();
+    if (!tg || !isHostOrSolo()) return;
+    tg.setPaused(false);
   });
 
   socket.on("updateSettings", (config) => {
-    tableGame.updateSettings(config);
-    io.emit("gameState", tableGame.getState());
+    if (socket.data.roomCode) {
+      if (!isHostOrSolo()) return;
+      const room = registry.getRoom(socket.data.roomCode);
+      if (room) room.tableGame.updateRoomSettings(config || {});
+      return;
+    }
+    // Independent of ranked status - coins are earned in every solo mode,
+    // not just ranked, so this always reflects whoever's actually logged in.
+    tableGame.setHumanUserId(socket.data.user ? socket.data.user.id : null);
+    const wantsRanked = !!(config && config.ranked) && !!socket.data.user;
+    if (wantsRanked) {
+      // Ranked ignores every client-sent table setting except difficulty -
+      // fixed, immutable settings so every competitor plays under the same
+      // conditions. Never trust the client for this, same as userId below.
+      tableGame.updateSettings({ ...RANKED_FIXED_SETTINGS, difficulty: config && config.difficulty });
+      const tournamentHands = tournamentLengthForKey(config && config.tournamentKey);
+      tableGame.setRankedMode(true, socket.data.user.id, tournamentHands);
+    } else {
+      tableGame.updateSettings(config);
+      tableGame.setRankedMode(false, null);
+    }
   });
+
+  socket.on("disconnect", () => {
+    registry.removeSocket(sessionId, socket.id);
+    if (socket.data.roomCode) registry.removeRoomSocket(socket.data.roomCode, socket.id);
+  });
+});
+
+export { TableGame, buildHandAnalysis };
+
+// A single throw anywhere that isn't already caught (a socket.io event
+// handler is the likely spot - unlike Express routes, socket.io does not
+// wrap each event listener in its own try/catch) would otherwise crash the
+// whole process, taking down every connected player's game at once over one
+// bad edge case. Logging and staying up is the right trade-off here: one
+// session misbehaving shouldn't end the server for everyone else. This is a
+// backstop for whatever isn't already handled locally, not a replacement
+// for fixing the actual bug it surfaces.
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception (server staying up):", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection (server staying up):", reason);
 });
 
 const PORT = process.env.PORT || 3000;
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {
   server.listen(PORT, () => {
-    console.log(`Paper Poker server running at http://localhost:${PORT}`);
+    console.log(`Paper Poker server running on port ${PORT}`);
+  });
+  server.on("error", (err) => {
+    console.error("Failed to start server:", err);
+    process.exit(1);
   });
 }

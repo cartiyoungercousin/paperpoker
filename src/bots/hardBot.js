@@ -1,6 +1,6 @@
 /**
  * Hard Bot Logic:
- * - Plays "tight-aggressive" (TAG) — selective pre-flop, aggressive post-flop.
+ * - Plays "tight-aggressive" (TAG): selective pre-flop, aggressive post-flop.
  * - Pre-flop: only plays premium hands (pairs 77+, ATs+, AQo+, KQs).
  * - Uses position awareness (acts stronger in late position).
  * - Post-flop: bets for value with strong hands, semi-bluffs with draws,

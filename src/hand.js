@@ -42,13 +42,27 @@ export class Hand {
     for (const id of this.order) this.holeCards.set(id, this.deck.draw(2));
   }
 
-  _firstActiveIdFrom(seatIndex) {
+  // Used for pot/showdown eligibility, where an all-in player still counts
+  // as "in the hand" even though they have no more decisions to make.
+  _activePlayers() {
+    return this.order.filter((id) => !this.folded.has(id));
+  }
+
+  // Used for picking who acts next. Unlike _activePlayers(), this also skips
+  // anyone already all-in (stack 0) - they're still in the hand for pot
+  // purposes, but have no legal action to take, so handing them "the turn"
+  // on a later street would stall the hand forever (nothing else advances
+  // it - a human sees a turn with no legal actions, and a bot's own
+  // legalActions() would come back all-false too).
+  _firstToActFrom(seatIndex) {
     const n = this.order.length;
     for (let step = 0; step < n; step++) {
       const id = this.order[(seatIndex + step) % n];
-      if (!this.folded.has(id)) return id;
+      if (this.folded.has(id)) continue;
+      if (this.stacks.get(id) === 0) continue;
+      return id;
     }
-    return null;
+    return null; // everyone left in the hand is all-in - no one can act
   }
 
   _postBlind(id, amount) {
@@ -72,11 +86,12 @@ export class Hand {
     this._postBlind(this.bbId, this.bigBlind);
 
     this._preflopFirstActSeat = n === 2 ? sbSeat : (bbSeat + 1) % n;
-    this._postflopFirstActSeat = sbSeat;
-  }
-
-  _activePlayers() {
-    return this.order.filter((id) => !this.folded.has(id));
+    // Heads-up is the one case where preflop and postflop first-to-act
+    // differ: the button/SB acts first preflop, but the big blind acts
+    // first on every street after that (the button gets the positional
+    // advantage of acting last once the flop comes down) - everywhere else,
+    // first-to-act postflop is simply the small blind seat.
+    this._postflopFirstActSeat = n === 2 ? bbSeat : sbSeat;
   }
 
   currentStreetName() {
@@ -126,11 +141,14 @@ export class Hand {
     let currentBet = 0;
     if (streetName === "preflop") {
       currentBet = this.bigBlind;
-      const firstActId = this._firstActiveIdFrom(this._preflopFirstActSeat);
-      actingIndex = activeIds.indexOf(firstActId);
+      const firstActId = this._firstToActFrom(this._preflopFirstActSeat);
+      // null means everyone left is already all-in - the actingIndex value
+      // doesn't matter in that case, since isComplete() will end the street
+      // immediately below regardless of who it points to.
+      actingIndex = firstActId != null ? activeIds.indexOf(firstActId) : 0;
     } else {
-      const firstActId = this._firstActiveIdFrom(this._postflopFirstActSeat);
-      actingIndex = activeIds.indexOf(firstActId);
+      const firstActId = this._firstToActFrom(this._postflopFirstActSeat);
+      actingIndex = firstActId != null ? activeIds.indexOf(firstActId) : 0;
     }
 
     this.currentRound = new BettingRound({

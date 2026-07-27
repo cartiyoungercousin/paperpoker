@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Paper Poker - Admin</title>
+<meta name="robots" content="noindex, nofollow" />
+<style>
+  * { box-sizing: border-box }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0d0d1a;
+    color: #e8e4dc;
+    min-height: 100vh;
+    padding: 32px;
+  }
+  h1 {
+    font-family: Georgia, serif;
+    font-size: 1.5rem;
+    margin: 0 0 4px;
+  }
+  #subtitle {
+    color: rgba(255,255,255,0.4);
+    font-size: 0.8rem;
+    margin: 0 0 28px;
+  }
+  #state-message {
+    color: rgba(255,255,255,0.5);
+    font-size: 0.9rem;
+  }
+  #dashboard { display: none; max-width: 1000px; margin: 0 auto }
+  .card-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 14px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .stat-card .label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 6px;
+  }
+  .stat-card .value {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #c9a84c;
+  }
+  .stat-card .sub {
+    font-size: 0.7rem;
+    color: rgba(255,255,255,0.35);
+    margin-top: 4px;
+  }
+  section {
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px;
+    padding: 20px 22px;
+    margin-bottom: 20px;
+  }
+  section h2 {
+    font-family: Georgia, serif;
+    font-size: 1rem;
+    margin: 0 0 16px;
+    color: #e8e4dc;
+  }
+  #chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 140px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  .bar-col {
+    flex: 1 0 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    min-width: 8px;
+    height: 100%;
+  }
+  .bar {
+    width: 100%;
+    background: linear-gradient(180deg, #dbb856, #c9a84c);
+    border-radius: 2px 2px 0 0;
+    min-height: 1px;
+  }
+  .bar-col:hover .bar { background: #f0cf6a }
+  .bar-tooltip {
+    font-size: 0.6rem;
+    color: rgba(255,255,255,0.3);
+    margin-top: 6px;
+    white-space: nowrap;
+  }
+  #days-select {
+    background: #1a1a2e;
+    color: #e8e4dc;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 0.75rem;
+    float: right;
+  }
+</style>
+</head>
+<body>
+  <h1>Paper Poker - Internal Dashboard</h1>
+  <p id="subtitle">Growth &amp; retention, visible only to admin accounts.</p>
+  <p id="state-message">Loading...</p>
+
+  <div id="dashboard">
+    <div class="card-row" id="totals-row"></div>
+    <div class="card-row" id="active-row"></div>
+    <div class="card-row" id="retention-row"></div>
+
+    <section>
+      <h2>Signups per day
+        <select id="days-select">
+          <option value="14">Last 14 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </h2>
+      <div id="chart"></div>
+    </section>
+  </div>
+
+<script>
+  function statCard(label, value, sub) {
+    return '<div class="stat-card"><div class="label">' + label + '</div><div class="value">' + value + '</div>' +
+      (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>';
+  }
+
+  function pct(x) {
+    return x == null ? '-' : Math.round(x * 100) + '%';
+  }
+
+  function renderChart(signupsByDay) {
+    const max = Math.max(1, ...signupsByDay.map((d) => d.count));
+    document.getElementById('chart').innerHTML = signupsByDay.map((d) => {
+      const heightPct = Math.max(2, Math.round((d.count / max) * 100));
+      const shortDate = d.date.slice(5); // "MM-DD"
+      return '<div class="bar-col" title="' + d.date + ': ' + d.count + '">' +
+        '<div class="bar" style="height:' + heightPct + '%"></div>' +
+        '<div class="bar-tooltip">' + shortDate + '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function load(days) {
+    const res = await fetch('/api/admin/stats?days=' + days);
+    if (res.status === 404) {
+      document.getElementById('state-message').textContent = 'Not found.';
+      return;
+    }
+    if (!res.ok) {
+      document.getElementById('state-message').textContent = 'Failed to load stats.';
+      return;
+    }
+    const data = await res.json();
+    document.getElementById('state-message').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+
+    document.getElementById('totals-row').innerHTML = [
+      statCard('Total Accounts', data.totals.totalUsers),
+      statCard('Hands Played (all-time)', data.totals.totalHandsPlayed),
+      statCard('Ranked Hours Played', (data.totals.totalRankedSecondsPlayed / 3600).toFixed(1) + 'h'),
+      statCard('Coins Outstanding', data.totals.totalCoinsOutstanding),
+    ].join('');
+
+    document.getElementById('active-row').innerHTML = [
+      statCard('Daily Active', data.activeUsers.dau, 'active in the last 24h'),
+      statCard('Weekly Active', data.activeUsers.wau, 'active in the last 7 days'),
+      statCard('Monthly Active', data.activeUsers.mau, 'active in the last 30 days'),
+    ].join('');
+
+    document.getElementById('retention-row').innerHTML = [
+      statCard('Day-1 Retention', pct(data.retention.day1), data.retention.day1Cohort + ' users eligible'),
+      statCard('Day-7 Retention', pct(data.retention.day7), data.retention.day7Cohort + ' users eligible'),
+    ].join('');
+
+    renderChart(data.signupsByDay);
+  }
+
+  document.getElementById('days-select').addEventListener('change', (e) => load(e.target.value));
+  load(document.getElementById('days-select').value);
+</script>
+</body>
+</html>

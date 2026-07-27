@@ -35,3 +35,15 @@ test("turboMode survives updateSettings (a session-level pacing preference, not 
   game.updateSettings({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
   assert.equal(game.turboMode, true);
 });
+
+// Regression test: ranked promises "no turbo, same conditions for everyone"
+// (see #ranked-setup-fixed-hint in index.html) - RANKED_FIXED_SETTINGS
+// explicitly includes turboMode: false specifically so entering ranked
+// forces it off even if it was left on from an earlier unranked/
+// experimental game in the same session.
+test("updateSettings forces turboMode off when the config explicitly says so (ranked's fixed settings)", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  game.turboMode = true;
+  game.updateSettings({ numPlayers: 6, startingStack: 1000, smallBlind: 10, bigBlind: 20, turboMode: false });
+  assert.equal(game.turboMode, false);
+});

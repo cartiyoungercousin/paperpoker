@@ -3,144 +3,192 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Paper Poker — Texas Hold'em</title>
+  <title>Paper Poker: Texas Hold'em</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- ===== HOME SCREEN ===== -->
-  <div id="home-screen">
+  <!-- Standalone, viewport-anchored toast stack - lives outside site-shell/
+       app so a notification (coins earned, etc.) is visible regardless of
+       which page or modal is currently showing. -->
+  <div id="toast-container"></div>
+
+  <!-- ===== SITE SHELL (Play / Range Trainer / Learn) ===== -->
+  <div id="site-shell">
     <div id="home-bg"></div>
-    <div id="home-content">
-      <div id="home-deco">♠ ♥ ♣ ♦</div>
-      <h1 id="home-title">Paper Poker</h1>
-      <p id="home-tagline">For both the casual and quantitative player</p>
-      <p id="home-subtitle">Texas Hold'em</p>
 
-      <div id="home-top-row">
-        <div class="fg" id="username-fg">
-          <label>Username</label>
-          <input type="text" id="input-username" placeholder="Your name" maxlength="16" value="You" />
-        </div>
-        <div id="home-config-row">
-          <button id="btn-show-settings" class="sec-btn config-btn">⚙ Game Config</button>
+    <nav id="site-nav">
+      <div class="site-nav-cluster site-nav-left">
+        <a id="site-logo" href="#">♠ Paper Poker</a>
+        <div class="site-tabs-side site-tabs-before">
+          <button class="site-tab" data-page="learn">Learn</button>
+          <button class="site-tab" data-page="trainer">Range Trainer</button>
         </div>
       </div>
-
-      <div id="difficulty-label">Choose Your Opponents' Difficulty</div>
-      <div id="difficulty-boxes">
-        <div class="diff-box" data-diff="easy">
-          <div class="diff-box-name">Easy</div>
-          <p class="diff-box-desc">Bots play loose and passive. They rarely bet or raise without a very strong hand, mostly just check and call, and don't factor in pot odds or equity at all.</p>
+      <!-- Absolutely positioned against #site-nav itself, not laid out
+           relative to the left/right clusters - its own center always lands
+           on the true center of the nav (and therefore the page), regardless
+           of how wide either cluster is (e.g. logging in widens the right
+           cluster substantially). The two clusters sit flush against the
+           nav's own edges rather than stretching to meet in the middle, so
+           there's always genuine empty space there for Play to occupy
+           without a risk of the tab groups visually colliding with it. -->
+      <button class="site-tab active site-tab-pivot" data-page="play">Play</button>
+      <div class="site-nav-cluster site-nav-right">
+        <div class="site-tabs-side site-tabs-after">
+          <button class="site-tab" data-page="multiplayer">Multiplayer</button>
+          <button class="site-tab" data-page="rumble">Rumble</button>
+          <button class="site-tab" data-page="experimental">Experimental</button>
         </div>
-        <div class="diff-box" data-diff="medium">
-          <div class="diff-box-name">Medium</div>
-          <p class="diff-box-desc">Bots stick to decent starting hands and fold the rest. They bet when they likely have the best of it, call along with draws, and bluff only occasionally.</p>
-        </div>
-        <div class="diff-box" data-diff="hard">
-          <div class="diff-box-name">Hard</div>
-          <p class="diff-box-desc">Bots play tight and aggressive. They only enter pots with premium hands, size bets differently for value vs. draws, and apply pressure with semi-bluffs and the odd check-raise.</p>
-        </div>
-        <div class="diff-box" data-diff="expert">
-          <div class="diff-box-name">Expert</div>
-          <p class="diff-box-desc">Bots weigh pot odds and hand ranges on every street, mix in 3-bets and well-timed bluffs, and adapt their aggression and calling frequency to a personality you can fine-tune before each hand.</p>
+        <div id="site-nav-actions">
+          <button id="btn-toggle-music-home" class="sec-btn icon-btn" title="Mute/unmute music">🎵</button>
+          <button id="btn-open-auth" class="sec-btn">Log In</button>
+          <div id="auth-user-chip" class="hidden">
+            <button id="btn-open-profile" class="auth-user-profile-btn" type="button" title="View your profile">
+              <span id="auth-user-badge"></span>
+              <span id="auth-user-name"></span>
+            </button>
+            <span id="auth-user-coins" title="Coins">🪙 <span id="auth-user-coins-count">0</span></span>
+            <button id="btn-open-customize-nav" class="sec-btn icon-btn" type="button" title="Customize / Shop">🛒</button>
+            <button id="btn-logout" class="sec-btn icon-btn" title="Log out">⏻</button>
+          </div>
         </div>
       </div>
-      <input type="hidden" id="input-difficulty" value="easy" />
+    </nav>
 
-      <div id="home-actions">
-        <button id="btn-home-start">Start Game</button>
-        <button id="btn-open-trainer" class="sec-btn">🎯 Preflop Range Trainer</button>
-      </div>
-    </div>
-    <div id="settings-modal" class="hidden">
-      <div id="settings-content">
-        <h2>Game Config</h2>
-        <div id="settings-form">
-          <div class="fg">
-            <label>Number of Players</label>
-            <select id="set-players">
-              <option value="2">2 (Heads-Up)</option>
-              <option value="3">3</option>
-              <option value="4">4</option>
-              <option value="5">5</option>
-              <option value="6" selected>6</option>
-              <option value="7">7</option>
-              <option value="8">8</option>
-              <option value="9">9</option>
-            </select>
+    <!-- ===== PLAY PAGE ===== -->
+    <div id="page-play" class="site-page">
+      <div id="play-layout">
+        <div class="play-side-column">
+          <aside id="play-leaderboard-panel" class="play-side-panel">
+            <div class="play-side-panel-head">
+              <h3>Leaderboard</h3>
+              <div id="lb-period-tabs">
+                <button class="lb-period-tab active" data-period="all" type="button">All-Time</button>
+                <button class="lb-period-tab" data-period="week" type="button">Weekly</button>
+              </div>
+            </div>
+            <div id="home-leaderboard-list"></div>
+            <div id="home-leaderboard-you-row" class="hidden"></div>
+          </aside>
+
+          <aside class="play-side-panel home-standalone-info-box">
+            <h3>What is Poker?</h3>
+            <ul>
+              <li>Everyone gets 2 private cards, plus 5 shared ones in the middle</li>
+              <li>Betting happens in rounds as more shared cards appear</li>
+              <li>Best 5-card hand at the end wins the pot</li>
+              <li>Bluffing means you don't always need the best cards to win</li>
+            </ul>
+          </aside>
+        </div>
+
+      <div id="home-content">
+        <div id="home-deco">♠ ♥ ♣ ♦</div>
+        <h1 id="home-title">Paper Poker</h1>
+        <p id="home-tagline">For both the casual and quantitative player</p>
+        <p id="home-subtitle">Texas Hold'em</p>
+
+        <div id="guest-save-progress-hint" class="hidden">
+          🔒 Playing as a guest - <button id="link-guest-signup" type="button">create a free account</button> to save your coins, rank, and progress.
+        </div>
+
+        <div id="home-top-row">
+          <div class="fg" id="username-fg">
+            <label>Username</label>
+            <input type="text" id="input-username" placeholder="Your name" maxlength="16" value="You" />
           </div>
-          <div class="fg">
-            <label>Starting Stack</label>
-            <select id="set-stack">
-              <option value="500">500</option>
-              <option value="1000" selected>1,000</option>
-              <option value="2500">2,500</option>
-              <option value="5000">5,000</option>
-              <option value="10000">10,000</option>
-            </select>
+          <div id="home-config-row">
+            <button id="btn-show-settings" class="sec-btn config-btn">⚙ Game Config</button>
           </div>
-          <div class="fg">
-            <label>Time Limit</label>
-            <select id="set-shot-clock">
-              <option value="0" selected>Off</option>
-              <option value="5">5 seconds</option>
-              <option value="10">10 seconds</option>
-              <option value="15">15 seconds</option>
-              <option value="30">30 seconds</option>
-              <option value="60">1 minute</option>
-            </select>
-          </div>
-          <div class="fg">
-            <label>Small Blind / Big Blind</label>
-            <div class="blind-row">
-              <select id="set-sb">
-                <option value="5">5</option>
-                <option value="10" selected>10</option>
-                <option value="15">15</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-              </select>
-              <span class="blind-sep">/</span>
-              <select id="set-bb">
-                <option value="10">10</option>
-                <option value="20" selected>20</option>
-                <option value="30">30</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
+        </div>
+
+        <div id="difficulty-label">Choose Your Opponents' Difficulty</div>
+        <div id="difficulty-boxes">
+          <div class="diff-box" data-diff="easy">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="easy"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name-row"><span class="diff-box-name">Easy</span><span class="diff-box-mascot-name" data-mascot="easy"></span></div>
+                <p class="diff-box-desc">Loose, passive, rarely bluffs</p>
+              </div>
             </div>
           </div>
-          <div class="fg">
-            <label>Master Volume <span id="volume-val">80%</span></label>
-            <input type="range" id="set-volume" min="0" max="100" value="80" />
+          <div class="diff-box" data-diff="medium">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="medium"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name-row"><span class="diff-box-name">Medium</span><span class="diff-box-mascot-name" data-mascot="medium"></span></div>
+                <p class="diff-box-desc">Solid starting hands, occasional bluffs</p>
+              </div>
+            </div>
+          </div>
+          <div class="diff-box" data-diff="hard">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="hard"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name-row"><span class="diff-box-name">Hard</span><span class="diff-box-mascot-name" data-mascot="hard"></span></div>
+                <p class="diff-box-desc">Tight, aggressive, real pressure</p>
+              </div>
+            </div>
+          </div>
+          <div class="diff-box" data-diff="expert">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="expert"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name-row"><span class="diff-box-name">Expert</span><span class="diff-box-mascot-name" data-mascot="expert"></span></div>
+                <p class="diff-box-desc">Full pot-odds play, tunable personality</p>
+              </div>
+            </div>
           </div>
         </div>
-        <div id="settings-actions">
-          <button id="btn-settings-ok">Apply</button>
-          <button id="btn-settings-cancel" class="sec-btn">Cancel</button>
+        <input type="hidden" id="input-difficulty" value="easy" />
+
+        <div id="home-actions">
+          <button id="btn-start-unranked" class="primary-action-btn unranked-btn" type="button">▶ Unranked Singleplayer</button>
+          <button id="btn-start-ranked" class="primary-action-btn ranked-btn" type="button">🏆 Ranked Singleplayer</button>
+        </div>
+      </div>
+
+        <div class="play-side-column">
+          <aside id="play-friends-panel" class="play-side-panel">
+            <h3>Play with Friends</h3>
+            <p id="play-friends-hint">Create a private room and share the code, or join one a friend sent you.</p>
+            <button id="btn-open-room" class="sec-btn" type="button">👥 Create or Join a Room</button>
+          </aside>
+
+          <aside class="play-side-panel home-standalone-info-box">
+            <h3>How to Play</h3>
+            <ul>
+              <li>On your turn: fold, check, call, bet, or raise</li>
+              <li>Bigger bets mean bigger risk, but also bigger pots</li>
+              <li>Where you sit at the table changes how you should play</li>
+            </ul>
+            <button class="home-info-link" id="link-learn-more" type="button">Full rules and terms → Learn</button>
+          </aside>
+
+          <aside class="play-side-panel home-standalone-info-box home-standalone-info-box-small">
+            <p>New to this? Drill starting hands risk-free before you sit down against a bot.</p>
+            <button class="home-info-link" id="link-range-trainer" type="button">Try the → Range Trainer</button>
+          </aside>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ===== RANGE TRAINER MODAL ===== -->
-  <div id="trainer-modal" class="hidden">
-    <div id="trainer-content">
-      <div id="trainer-head">
-        <span>Preflop Range Trainer</span>
-        <button id="btn-close-trainer">✕</button>
-      </div>
-      <div id="trainer-body">
-        <p id="trainer-disclaimer">Simplified reference ranges for training purposes — not a GTO solver.</p>
+    <!-- ===== RANGE TRAINER PAGE ===== -->
+    <div id="page-trainer" class="site-page hidden">
+      <div id="trainer-page-content">
+        <h1 class="site-page-title">Preflop Range Trainer</h1>
+        <p id="trainer-disclaimer">Simplified reference ranges for training purposes, not a full GTO solver.</p>
         <div id="trainer-stats">
           <div class="arow"><span>Reps</span><span id="tr-reps">0</span></div>
           <div class="arow"><span>Correct</span><span id="tr-correct">0</span></div>
-          <div class="arow"><span>Accuracy</span><span id="tr-accuracy">—</span></div>
+          <div class="arow"><span>Accuracy</span><span id="tr-accuracy">-</span></div>
+          <div class="arow"><span>Streak</span><span id="tr-streak">0</span></div>
         </div>
-        <div id="trainer-scenario">—</div>
+        <div id="trainer-scenario">-</div>
         <div id="trainer-hand"></div>
         <div id="trainer-actions">
           <button id="btn-trainer-fold" class="act-btn fold-btn">Fold</button>
@@ -149,6 +197,414 @@
         </div>
         <div id="trainer-feedback" class="hidden"></div>
         <button id="btn-trainer-next" class="hidden">Next Hand</button>
+
+        <button id="btn-toggle-range-chart" class="sec-btn" type="button">View Range Chart</button>
+        <div id="trainer-range-chart-panel" class="hidden">
+          <p id="trc-caption">-</p>
+          <div id="trc-grid"></div>
+          <div id="trc-legend">
+            <span class="trc-legend-item"><span class="trc-swatch trc-swatch-raise"></span>Raise</span>
+            <span class="trc-legend-item"><span class="trc-swatch trc-swatch-call"></span>Call</span>
+            <span class="trc-legend-item"><span class="trc-swatch trc-swatch-fold"></span>Fold</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== LEARN PAGE (content added in a later phase) ===== -->
+    <div id="page-learn" class="site-page hidden">
+      <div id="learn-placeholder">
+        <h1 class="site-page-title">Learning Center</h1>
+        <p>Coming soon: hand rankings, betting rounds, positions and blinds, play-style basics, a glossary of every stat in this app, and an equity matrix.</p>
+      </div>
+    </div>
+
+    <!-- ===== MULTIPLAYER PAGE ===== -->
+    <div id="page-multiplayer" class="site-page hidden">
+      <div id="multiplayer-placeholder">
+        <h1 class="site-page-title">Multiplayer</h1>
+        <div id="mp-robot-scene" aria-hidden="true">
+          <div class="mp-robot mp-robot-1">
+            <div class="mp-robot-head">
+              <div class="mp-robot-eye"></div>
+              <div class="mp-robot-eye"></div>
+            </div>
+            <div class="mp-robot-body">
+              <div class="mp-robot-light"></div>
+            </div>
+            <div class="mp-robot-arm mp-robot-arm-left"></div>
+            <div class="mp-robot-arm mp-robot-arm-right">
+              <div class="mp-wrench"></div>
+            </div>
+          </div>
+          <div class="mp-robot mp-robot-2">
+            <div class="mp-robot-head">
+              <div class="mp-robot-eye"></div>
+              <div class="mp-robot-eye"></div>
+            </div>
+            <div class="mp-robot-body">
+              <div class="mp-robot-light"></div>
+            </div>
+            <div class="mp-robot-arm mp-robot-arm-left"></div>
+            <div class="mp-robot-arm mp-robot-arm-right"></div>
+          </div>
+          <div class="mp-gear mp-gear-big"></div>
+          <div class="mp-gear mp-gear-small"></div>
+          <div class="mp-workbench"></div>
+        </div>
+        <p class="mp-heading">Coming Soon</p>
+        <p>We're building real-time tables where you can sit down with friends and strangers alike. For now, private rooms let you play with friends against bots. Full multiplayer tables are next on the workbench.</p>
+      </div>
+    </div>
+
+    <!-- ===== RUMBLE PAGE ===== -->
+    <div id="page-rumble" class="site-page hidden">
+      <div id="rumble-placeholder">
+        <h1 class="site-page-title">Rumble</h1>
+        <div id="rumble-wheel-scene" aria-hidden="true">
+          <div id="rumble-wheel"></div>
+          <div id="rumble-wheel-hub"></div>
+          <div id="rumble-wheel-pointer"></div>
+          <div class="rumble-spark rumble-spark-1"></div>
+          <div class="rumble-spark rumble-spark-2"></div>
+          <div class="rumble-spark rumble-spark-3"></div>
+        </div>
+        <p class="mp-heading">Coming Soon</p>
+        <p>A faster, wilder way to play. Every hand deals you a random power-up you can use on your own turn. Full details soon.</p>
+      </div>
+    </div>
+
+    <!-- ===== EXPERIMENTAL PAGE ===== -->
+    <div id="page-experimental" class="site-page hidden">
+      <div id="experimental-content">
+        <h1 class="site-page-title">Experimental Bots</h1>
+        <p id="experimental-intro">A handful of personality bots for solo play, not part of the ranked ladder, just for fun.</p>
+
+        <h2 class="experimental-group-title">1v1 Bots</h2>
+        <p class="experimental-group-desc">These four always play heads-up, regardless of the player count in Game Config - other settings (stack, blinds, time limit) still apply.</p>
+        <div id="experimental-boxes">
+          <div class="diff-box exp-box" data-diff="drunk">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="drunk"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name">The Drunk <span class="exp-box-tag">(1v1)</span></div>
+                <div class="diff-box-mascot-name" data-mascot="drunk"></div>
+              </div>
+            </div>
+            <p class="diff-box-desc">Bets and folds with almost no regard for hand strength. Sometimes shoves way more than the pot calls for, sometimes checks back a monster for no reason at all. Pure chaos.</p>
+          </div>
+          <div class="diff-box exp-box" data-diff="bluffer">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="bluffer"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name">The Bluffer <span class="exp-box-tag">(1v1)</span></div>
+                <div class="diff-box-mascot-name" data-mascot="bluffer"></div>
+              </div>
+            </div>
+            <p class="diff-box-desc">Bets and raises far more often than its cards justify, but not always. It shows up with the real thing often enough that assuming a bluff every time will cost you.</p>
+          </div>
+          <div class="diff-box exp-box" data-diff="rock">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="rock"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name">The Rock <span class="exp-box-tag">(1v1)</span></div>
+                <div class="diff-box-mascot-name" data-mascot="rock"></div>
+              </div>
+            </div>
+            <p class="diff-box-desc">Extremely tight and passive. Folds almost everything - genuinely alarming the rare time it finally plays a hand.</p>
+          </div>
+          <div class="diff-box exp-box" data-diff="maniac">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="maniac"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name">The Maniac <span class="exp-box-tag">(1v1)</span></div>
+                <div class="diff-box-mascot-name" data-mascot="maniac"></div>
+              </div>
+            </div>
+            <p class="diff-box-desc">Bets and raises almost constantly, regardless of hand strength. Rarely folds. Pure chaos, not a calculated bluff.</p>
+          </div>
+        </div>
+
+        <h2 class="experimental-group-title">Multi-Bot Tables</h2>
+        <p class="experimental-group-desc">A full table of original characters, seated together, always at once.</p>
+        <div id="experimental-multi-boxes">
+          <div class="diff-box exp-box" data-diff="boardroom">
+            <div class="diff-box-head">
+              <span class="diff-box-avatar" data-mascot="tycoon"></span>
+              <div class="diff-box-titles">
+                <div class="diff-box-name">The Boardroom</div>
+                <div class="diff-box-mascot-name">A blustery tycoon, a smooth schemer, a paranoid conspiracy guy, an image-obsessed socialite, a grizzled veteran, and an over-eager newcomer</div>
+              </div>
+            </div>
+            <p class="diff-box-desc">Six original characters at one table, all at once. Same solid decision-making under the hood - the fun is entirely in the table talk.</p>
+          </div>
+        </div>
+
+        <input type="hidden" id="input-experimental-difficulty" value="drunk" />
+        <button id="btn-start-experimental" class="primary-action-btn unranked-btn" type="button">▶ Start Game</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="auth-modal" class="hidden">
+    <div id="auth-content">
+      <div id="auth-tabs">
+        <button class="auth-tab active" data-auth-tab="login">Log In</button>
+        <button class="auth-tab" data-auth-tab="signup">Sign Up</button>
+      </div>
+      <form id="auth-form-login" class="auth-form">
+        <div class="fg">
+          <label>Email</label>
+          <input type="email" id="login-email" autocomplete="email" required />
+        </div>
+        <div class="fg">
+          <label>Password</label>
+          <input type="password" id="login-password" autocomplete="current-password" required />
+        </div>
+        <p id="login-error" class="auth-error hidden"></p>
+        <button type="submit" class="auth-submit">Log In</button>
+      </form>
+      <form id="auth-form-signup" class="auth-form hidden">
+        <div class="fg">
+          <label>Display Name</label>
+          <input type="text" id="signup-name" maxlength="24" autocomplete="nickname" required />
+        </div>
+        <div class="fg">
+          <label>Email</label>
+          <input type="email" id="signup-email" autocomplete="email" required />
+        </div>
+        <div class="fg">
+          <label>Password (min. 8 characters)</label>
+          <input type="password" id="signup-password" minlength="8" autocomplete="new-password" required />
+        </div>
+        <p id="signup-error" class="auth-error hidden"></p>
+        <button type="submit" class="auth-submit">Create Account</button>
+      </form>
+      <button id="btn-close-auth" class="sec-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="ranked-setup-modal" class="hidden">
+    <div id="ranked-setup-content">
+      <h2>Ranked Setup</h2>
+      <div class="fg">
+        <label>Difficulty</label>
+        <div id="ranked-setup-diff-row">
+          <button class="ranked-setup-btn active" data-diff="easy" type="button">Easy</button>
+          <button class="ranked-setup-btn" data-diff="medium" type="button">Medium</button>
+          <button class="ranked-setup-btn" data-diff="hard" type="button">Hard</button>
+          <button class="ranked-setup-btn" data-diff="expert" type="button">Expert</button>
+        </div>
+      </div>
+      <div class="fg">
+        <label>Length</label>
+        <div id="ranked-setup-length-row">
+          <button class="ranked-setup-btn active" data-hands="0" type="button">Single Hand</button>
+          <button class="ranked-setup-btn" data-hands="10" type="button">Short (10 hands)</button>
+          <button class="ranked-setup-btn" data-hands="25" type="button">Standard (25 hands)</button>
+          <button class="ranked-setup-btn" data-hands="50" type="button">Long (50 hands)</button>
+        </div>
+      </div>
+      <p id="ranked-setup-xp-info"></p>
+      <p id="ranked-setup-fixed-hint">Ranked always uses the same table: 6 players, $1,000 starting stacks, 10/20 blinds, a 15 second clock, no turbo. Everyone climbs the ladder under the same conditions.</p>
+      <button id="btn-ranked-setup-begin" class="primary-action-btn ranked-btn" type="button">Begin Ranked Game</button>
+      <button id="btn-close-ranked-setup" class="sec-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div id="rank-results-modal" class="hidden">
+    <div id="rank-results-content">
+      <h2 id="rank-results-title">Session Complete</h2>
+      <div id="rank-results-delta"></div>
+      <div id="rank-results-badge-row">
+        <span id="rank-results-badge"></span>
+        <div id="rank-results-label"></div>
+      </div>
+      <div id="rank-results-tier-flourish" class="hidden">🎉 Rank Up!</div>
+      <div id="rank-results-xp-bar-bg"><div id="rank-results-xp-bar-fill"></div></div>
+      <div id="rank-results-xp-text"></div>
+      <button id="btn-rank-results-continue" class="primary-action-btn unranked-btn" type="button">Continue</button>
+    </div>
+  </div>
+
+  <div id="profile-modal" class="hidden">
+    <div id="profile-content">
+      <div id="profile-head">
+        <span id="profile-badge"></span>
+        <div id="profile-head-titles">
+          <div id="profile-name"></div>
+          <div id="profile-rank-label"></div>
+        </div>
+      </div>
+      <div id="profile-xp-bar-row">
+        <div id="profile-xp-bar-bg"><div id="profile-xp-bar-fill"></div></div>
+        <span id="profile-xp-text"></span>
+      </div>
+      <div id="profile-coins-row">🪙 <span id="profile-coins-count">0</span> Coins</div>
+      <p id="profile-scope-hint">Ranked matches only.</p>
+      <div id="profile-stats-grid">
+        <div class="profile-stat"><span class="profile-stat-label">Hands Played</span><span class="profile-stat-value" id="profile-hands-played">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Win %</span><span class="profile-stat-value" id="profile-win-pct">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Hours Played</span><span class="profile-stat-value" id="profile-hours-played">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Net Profit</span><span class="profile-stat-value" id="profile-net-profit">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Biggest Pot</span><span class="profile-stat-value" id="profile-biggest-pot">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Biggest Win</span><span class="profile-stat-value" id="profile-biggest-win">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">W$SD %</span><span class="profile-stat-value" id="profile-wsd-pct">-</span></div>
+      </div>
+      <button id="btn-close-profile" class="sec-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="customize-modal" class="hidden">
+    <div id="customize-content">
+      <h2>Customize</h2>
+      <div id="customize-coins-row">🪙 <span id="customize-coins-count">0</span> Coins</div>
+      <div class="customize-section">
+        <div class="customize-section-title">Card Backs</div>
+        <div id="customize-cardback-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section">
+        <div class="customize-section-title">Table Felt</div>
+        <div id="customize-felt-grid" class="customize-grid"></div>
+      </div>
+      <button id="btn-close-customize" class="sec-btn" type="button">Close</button>
+    </div>
+  </div>
+
+  <div id="daily-reward-modal" class="hidden">
+    <div id="daily-reward-content">
+      <h2>Daily Reward</h2>
+      <div id="daily-reward-coins-amount"></div>
+      <div id="daily-reward-streak-text"></div>
+      <button id="btn-claim-daily-reward" class="primary-action-btn unranked-btn" type="button">Claim</button>
+    </div>
+  </div>
+
+  <div id="room-modal" class="hidden">
+    <div id="room-content">
+      <div id="room-tabs">
+        <button class="auth-tab room-tab active" data-room-tab="create" type="button">Create Room</button>
+        <button class="auth-tab room-tab" data-room-tab="join" type="button">Join Room</button>
+      </div>
+      <form id="room-form-create" class="auth-form room-form">
+        <div class="fg">
+          <label>Your Name</label>
+          <input type="text" id="room-create-name" maxlength="16" placeholder="Your name" required />
+        </div>
+        <div class="fg">
+          <label>Starting Stack</label>
+          <select id="room-create-stack">
+            <option value="500">500</option>
+            <option value="1000" selected>1,000</option>
+            <option value="2500">2,500</option>
+            <option value="5000">5,000</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Small Blind / Big Blind</label>
+          <div class="blind-row">
+            <select id="room-create-sb">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="25">25</option>
+            </select>
+            <span class="blind-sep">/</span>
+            <select id="room-create-bb">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+            </select>
+          </div>
+        </div>
+        <p id="room-create-error" class="auth-error hidden"></p>
+        <button type="submit" class="auth-submit">Create Room</button>
+      </form>
+      <form id="room-form-join" class="auth-form room-form hidden">
+        <div class="fg">
+          <label>Room Code</label>
+          <input type="text" id="room-join-code" maxlength="6" placeholder="ABCDEF" style="text-transform:uppercase" required />
+        </div>
+        <div class="fg">
+          <label>Your Name</label>
+          <input type="text" id="room-join-name" maxlength="16" placeholder="Your name" required />
+        </div>
+        <p id="room-join-error" class="auth-error hidden"></p>
+        <button type="submit" class="auth-submit">Join Room</button>
+      </form>
+      <button id="btn-close-room" class="sec-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="hidden">
+    <div id="settings-content">
+      <h2>Game Config</h2>
+      <div id="settings-form">
+        <div class="fg">
+          <label>Number of Players</label>
+          <select id="set-players">
+            <option value="2">2 (Heads-Up)</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6" selected>6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Starting Stack</label>
+          <select id="set-stack">
+            <option value="500">500</option>
+            <option value="1000" selected>1,000</option>
+            <option value="2500">2,500</option>
+            <option value="5000">5,000</option>
+            <option value="10000">10,000</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Time Limit</label>
+          <select id="set-shot-clock">
+            <option value="0" selected>Off</option>
+            <option value="5">5 seconds</option>
+            <option value="10">10 seconds</option>
+            <option value="15">15 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60">1 minute</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Small Blind / Big Blind</label>
+          <div class="blind-row">
+            <select id="set-sb">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
+            <span class="blind-sep">/</span>
+            <select id="set-bb">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+        <div class="fg">
+          <label>Sound Effects Volume <span id="volume-val">80%</span></label>
+          <input type="range" id="set-volume" min="0" max="100" value="80" />
+        </div>
+        <div class="fg">
+          <label>Music Volume <span id="music-volume-val">50%</span></label>
+          <input type="range" id="set-music-volume" min="0" max="100" value="50" />
+        </div>
+      </div>
+      <div id="settings-actions">
+        <button id="btn-settings-ok">Apply</button>
+        <button id="btn-settings-cancel" class="sec-btn">Cancel</button>
       </div>
     </div>
   </div>
@@ -180,7 +636,7 @@
             </select>
           </div>
           <div class="bc-fg">
-            <label>Passiveness <span style="color:#4dd0e1">◀</span> — Aggressiveness <span style="color:#ef5350">▶</span></label>
+            <label>Passiveness <span style="color:#4dd0e1">◀</span> to <span style="color:#ef5350">▶</span> Aggressiveness</label>
             <div class="bc-slider-row">
               <span style="color:#4dd0e1;font-size:0.6rem">Passive</span>
               <input type="range" id="bc-aggression" min="0" max="100" value="50" class="agg-slider" />
@@ -201,6 +657,16 @@
         <button id="btn-start-hand">Start Hand</button>
       </div>
     </div>
+    <div id="room-lobby-overlay" class="hidden">
+      <div id="room-lobby-card">
+        <h2>Room <span id="room-lobby-code"></span></h2>
+        <p id="room-lobby-hint">Share this code with friends so they can join.</p>
+        <div id="room-lobby-players"></div>
+        <button id="btn-room-start-game" class="hidden">Start Game</button>
+        <p id="room-lobby-waiting" class="hidden">Waiting for the host to start the game...</p>
+        <button id="btn-room-leave" class="sec-btn">Leave Room</button>
+      </div>
+    </div>
 
     <!-- Header -->
     <div id="header">
@@ -208,17 +674,20 @@
         <a id="logo-link" href="#">♠ Paper Poker</a>
         <span id="hu"></span>
         <span id="hm">Easy</span>
+        <span id="hranked" class="hidden">🏆 Ranked</span>
+        <span id="hroom" class="hidden"></span>
       </div>
       <div id="hc">
         <span id="h-counter">Hand #0</span>
         <span class="hd">|</span>
-        <span id="h-street">—</span>
+        <span id="h-street">-</span>
         <span class="hd">|</span>
         <span id="h-pot">Pot $0</span>
         <span class="hd">|</span>
         <span id="h-blinds">10/20</span>
       </div>
       <div id="hr">
+        <button id="btn-toggle-music" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto" title="Mute/unmute music">🎵 Music: On</button>
         <button id="btn-toggle-turbo" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto" title="Speed up bot turns">⚡ Turbo: Off</button>
         <button id="btn-pause-game" class="sec-btn" style="padding:6px 12px;font-size:0.75rem;width:auto">⏸ Pause</button>
         <button id="btn-toggle-stats">Stats</button>
@@ -276,19 +745,13 @@
           </div>
           <!-- Seat containers -->
           <div id="seats-container"></div>
+          <!-- Bot chat bubbles - a separate, persistent container so a fading
+               bubble isn't wiped out by the next seats-container re-render. -->
+          <div id="bot-chat-container"></div>
         </div>
 
         <!-- Action Popups -->
         <div id="action-popup-area"></div>
-
-        <!-- Timer Bar -->
-        <div id="timer-container">
-          <span id="timer-label">Time</span>
-          <div id="timer-bar-bg">
-            <div id="timer-bar-fill"></div>
-          </div>
-          <span id="timer-text"></span>
-        </div>
 
         <!-- Player's cards -->
         <div id="player-area">
@@ -299,6 +762,14 @@
           <div id="player-info">
             <span id="player-name-display">You (You)</span>
             <span id="player-stack-display">$1,000</span>
+          </div>
+          <!-- Turn countdown ring - only shown when a time limit is set -->
+          <div id="turn-timer-ring" class="hidden">
+            <svg width="44" height="44" viewBox="0 0 44 44">
+              <circle class="ttr-track" cx="22" cy="22" r="18"></circle>
+              <circle id="ttr-progress" class="ttr-progress" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <span id="ttr-text"></span>
           </div>
         </div>
 
@@ -335,19 +806,16 @@
           <div id="analyzer-street-tabs"></div>
           <div id="analyzer-street-board"></div>
           <div id="analyzer-street-info">
-            <div class="arow"><span>Pot</span><span id="as-pot">—</span></div>
-            <div class="arow"><span>Your Equity</span><span id="as-equity">—</span></div>
+            <div class="arow"><span>Pot</span><span id="as-pot">-</span></div>
+            <div class="arow"><span>Your Equity</span><span id="as-equity">-</span></div>
           </div>
           <div id="analyzer-street-actions"></div>
         </div>
         <div id="analyzer-stats">
-          <div class="arow"><span>Your Hand</span><span id="aa-hand">—</span></div>
-          <div class="arow"><span>Board</span><span id="aa-board">—</span></div>
-          <div class="arow"><span>Best Hand</span><span id="aa-best">—</span></div>
-          <div class="arow"><span>Pot Odds Faced</span><span id="aa-pot-odds">—</span></div>
-          <div class="arow"><span>Your Action</span><span id="aa-your-action">—</span></div>
-          <div class="arow"><span>EV of Your Action</span><span id="aa-ev">—</span></div>
-          <div class="arow"><span>Mistake?</span><span id="aa-mistake" style="font-weight:600">—</span></div>
+          <div class="arow"><span>Your Hand</span><span id="aa-hand">-</span></div>
+          <div class="arow"><span>Board</span><span id="aa-board">-</span></div>
+          <div class="arow"><span>Best Hand</span><span id="aa-best">-</span></div>
+          <div id="aa-luck-tag" class="hidden"></div>
         </div>
       </div>
     </div>
@@ -375,26 +843,26 @@
       <div class="sr"><span class="sl">Biggest Pot</span><span class="sv" id="st-bp">$0</span></div>
       <div class="sr"><span class="sl">Current Stack</span><span class="sv" id="st-cs">$0</span></div>
       <div class="sr"><span class="sl">Net Profit</span><span class="sv" id="st-np">$0</span></div>
-      <div class="sr"><span class="sl">Return on Investment</span><span class="sv" id="st-roi">—</span></div>
+      <div class="sr"><span class="sl">Return on Investment</span><span class="sv" id="st-roi">-</span></div>
       <div class="sr"><span class="sl">VPIP</span><span class="sv" id="st-vp">0%</span></div>
       <div class="sr"><span class="sl">PFR %</span><span class="sv" id="st-pfr">0%</span></div>
-      <div class="sr"><span class="sl">3-Bet %</span><span class="sv" id="st-3bet">—</span></div>
-      <div class="sr"><span class="sl">Aggression Factor</span><span class="sv" id="st-af">—</span></div>
+      <div class="sr"><span class="sl">3-Bet %</span><span class="sv" id="st-3bet">-</span></div>
+      <div class="sr"><span class="sl">Aggression Factor</span><span class="sv" id="st-af">-</span></div>
       <div class="sr"><span class="sl">Fold %</span><span class="sv" id="st-fp">0%</span></div>
       <div class="sr"><span class="sl">Bets / Raises</span><span class="sv" id="st-br">0</span></div>
       <div class="sr"><span class="sl">Calls</span><span class="sv" id="st-ca">0</span></div>
       <div class="sr"><span class="sl">Checks</span><span class="sv" id="st-ch">0</span></div>
       <div class="sr"><span class="sl">WTSD % (of hands dealt)</span><span class="sv" id="st-wtsd">0%</span></div>
-      <div class="sr"><span class="sl">W$SD %</span><span class="sv" id="st-wsd">—</span></div>
+      <div class="sr"><span class="sl">W$SD %</span><span class="sv" id="st-wsd">-</span></div>
       <div class="sr"><span class="sl">Showdown Winnings</span><span class="sv" id="st-sdw">$0</span></div>
       <div class="sr"><span class="sl">Non-Showdown Winnings</span><span class="sv" id="st-nsdw">$0</span></div>
       <div class="sr"><span class="sl">Biggest Win</span><span class="sv" id="st-bw">$0</span></div>
       <div class="sr"><span class="sl">Biggest Loss</span><span class="sv" id="st-bl">$0</span></div>
-      <div class="sr"><span class="sl">Current Streak</span><span class="sv" id="st-streak">—</span></div>
-      <div class="sr"><span class="sl">Session Time</span><span class="sv" id="st-session-time">—</span></div>
-      <div class="sr"><span class="sl">Hands / Hour</span><span class="sv" id="st-hands-hr">—</span></div>
-      <div class="sr"><span class="sl">All-In EV ($)</span><span class="sv" id="st-ev">—</span></div>
-      <div class="sr"><span class="sl">Luck ($)</span><span class="sv" id="st-luck">—</span></div>
+      <div class="sr"><span class="sl">Current Streak</span><span class="sv" id="st-streak">-</span></div>
+      <div class="sr"><span class="sl">Session Time</span><span class="sv" id="st-session-time">-</span></div>
+      <div class="sr"><span class="sl">Hands / Hour</span><span class="sv" id="st-hands-hr">-</span></div>
+      <div class="sr"><span class="sl">All-In EV ($)</span><span class="sv" id="st-ev">-</span></div>
+      <div class="sr"><span class="sl">Luck ($)</span><span class="sv" id="st-luck">-</span></div>
       <div class="sr"><span class="sl">All-In Hands Tracked</span><span class="sv" id="st-allin-count">0</span></div>
       <div id="stats-export-row">
         <button id="btn-export-csv" class="sec-btn">Export CSV</button>
@@ -412,6 +880,10 @@
 
     let playerName = 'You';
     let homeVisible = true; // tracks whether the home screen (not the live table) is showing, so we don't play game sounds in the background
+    let musicPausedByGame = false; // tracks whether music is currently paused specifically because state.isPaused is true
+    let roomMode = false; // true while playing in a private room rather than the solo/bot session
+    let roomCode = null;
+    let roomIsHost = false;
     let settings = { numPlayers: 6, startingStack: 1000, smallBlind: 10, bigBlind: 20, shotClockSeconds: 0, difficulty: 'easy' };
     let timerInterval = null;
     let timerRemaining = 0;
@@ -421,6 +893,22 @@
 
     // ===== CATEGORY constants (mirror server) =====
     const CATEGORY = { HIGH_CARD:0, ONE_PAIR:1, TWO_PAIR:2, THREE_OF_A_KIND:3, STRAIGHT:4, FLUSH:5, FULL_HOUSE:6, FOUR_OF_A_KIND:7, STRAIGHT_FLUSH:8 };
+
+    // Escapes HTML metacharacters before any user-controllable string
+    // (display names - typed freely at signup or when joining a room - hand
+    // history text embedding them, etc.) gets concatenated into an
+    // innerHTML template. Every such sink in this file must run its
+    // untrusted values through this first - a raw display name otherwise
+    // becomes stored/reflected script execution for every other viewer
+    // (room lobby, seats, showdown results, hand history, leaderboard).
+    function escapeHtml(str) {
+      return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
 
     function getDisplayName(name) {
       const raw = (name || '').trim();
@@ -439,21 +927,204 @@
       return seats;
     }
 
+    // Renders a fading chat bubble anchored to whichever bot's seat is
+    // speaking, computed fresh from the same seat math the seats themselves
+    // use rather than a live seat DOM node - seats-container gets fully
+    // rebuilt on every gameState push, which would otherwise wipe a bubble
+    // out mid-fade.
+    function showBotChatBubble(playerId, text) {
+      if (!lastGameState || homeVisible) return;
+      const n = lastGameState.players.length;
+      const player = lastGameState.players.find(p => p.id === playerId);
+      if (!player) return;
+      const positions = computeSeats(n);
+      const seatIndex = Number.isInteger(player.seat) ? player.seat % n : 0;
+      const pos = positions[seatIndex] || { t: '50%', l: '50%' };
+      // Clamped inward from the seat's own (unclamped) position - a seat near
+      // the table's left/right edge would otherwise center a ~170px-wide
+      // bubble close enough to the edge to clip off the visible page.
+      const clampedLeft = Math.min(85, Math.max(15, parseFloat(pos.l)));
+      const bubble = document.createElement('div');
+      bubble.className = 'bot-chat-bubble';
+      bubble.textContent = text;
+      bubble.style.top = pos.t;
+      bubble.style.left = clampedLeft + '%';
+      document.getElementById('bot-chat-container').appendChild(bubble);
+      requestAnimationFrame(() => bubble.classList.add('visible'));
+      setTimeout(() => {
+        bubble.classList.remove('visible');
+        setTimeout(() => bubble.remove(), 400);
+      }, 3200);
+    }
+
     // ===== Sound =====
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
     function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
-    function beep(f,d,v=0.08,t='sine') {
+    function beep(f,d,v=0.15,t='sine') {
       try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
     }
-    function sf() { beep(200,0.15,0.06,'sawtooth'); }
-    function sch() { beep(600,0.08,0.05); }
-    function sca() { beep(440,0.1,0.06); }
-    function sbet() { beep(330,0.12,0.07,'triangle'); }
-    function sra() { beep(550,0.1,0.07,'square'); setTimeout(()=>beep(660,0.1,0.05,'square'),80); }
-    function swin() { beep(523,0.15); setTimeout(()=>beep(659,0.15),150); setTimeout(()=>beep(784,0.2),300); }
-    function slose() { beep(400,0.2,0.06,'sawtooth'); setTimeout(()=>beep(300,0.25,0.06,'sawtooth'),200); }
-    function sbotTurn() { beep(350,0.06,0.03,'triangle'); setTimeout(()=>beep(400,0.06,0.03,'triangle'),80); }
+    function sf() { beep(200,0.15,0.11,'sawtooth'); }
+    function sch() { beep(600,0.08,0.1); }
+    function sca() { beep(440,0.1,0.11); }
+    function sbet() { beep(330,0.12,0.13,'triangle'); }
+    function sra() { beep(550,0.1,0.13,'square'); setTimeout(()=>beep(660,0.1,0.1,'square'),80); }
+    // A fuller triumphant arpeggio (C5-E5-G5-C6) than a plain 3-note chime -
+    // the held, louder top note is what sells the "upbeat momentum" on a win.
+    function swin() {
+      beep(523,0.15,0.16); setTimeout(()=>beep(659,0.15,0.16),130);
+      setTimeout(()=>beep(784,0.15,0.16),260); setTimeout(()=>beep(1047,0.35,0.18),390);
+    }
+    // A descending "sad trombone" run (G4-F4-Eb4-C4) rather than just two
+    // falling notes - the slower, longer final note is what sells the loss.
+    function slose() {
+      beep(392,0.22,0.13,'sawtooth'); setTimeout(()=>beep(349,0.22,0.13,'sawtooth'),180);
+      setTimeout(()=>beep(311,0.24,0.13,'sawtooth'),360); setTimeout(()=>beep(261,0.4,0.13,'sawtooth'),540);
+    }
+    function sbotTurn() { beep(350,0.06,0.06,'triangle'); setTimeout(()=>beep(400,0.06,0.06,'triangle'),80); }
+
+    // ===== Background Music =====
+    // Two tracks: a homepage/site-shell track (plays continuously across the
+    // Play/Range Trainer/Learn tabs, never restarted by switching between them)
+    // and a game track that swaps in once #app (the live table) is visible -
+    // covers solo/ranked-vs-bots and, later, private rooms with friends alike,
+    // since both are just "the live table is showing" from this code's view.
+    let musicVolume = 0.5;
+    let musicMuted = false;
+    let musicStarted = false;
+    // One continuous track for the whole site - homepage and in-game alike -
+    // rather than switching to a separate game track and losing playback
+    // position every time the view changes.
+    const bgMusic = new Audio('assets/audio/homepage_music_jazz.mp3');
+    bgMusic.loop = true;
+    bgMusic.volume = 1; // raw element volume left at 1 - musicGainNode below is the single volume control point
+    bgMusic.addEventListener('error', () => console.warn('Background music failed to load - drop a file at assets/audio/homepage_music_jazz.mp3'));
+
+    // A second track that crossfades in over the bed during tense moments
+    // (a big pot, an all-in) - see checkTensionTrigger() further down. Silent
+    // until then, not started/played until the crossfade actually needs it.
+    const tensionMusic = new Audio('assets/audio/tense_music.mp3');
+    tensionMusic.loop = true;
+    tensionMusic.volume = 1;
+    tensionMusic.addEventListener('error', () => console.warn('Tension music failed to load - drop a file at assets/audio/tense_music.mp3'));
+
+    // Routed through the SAME AudioContext the SFX beeps use (via
+    // createMediaElementSource -> a shared gain node), rather than just
+    // setting <audio>.volume directly. This is what makes duckMusic() below
+    // possible - every beep briefly pulls the music's gain down and back up,
+    // so short/quiet SFX still cut through a continuously-playing music bed
+    // instead of getting masked by it.
+    //
+    // Each track also gets its OWN gain node (bgTrackGain/tensionTrackGain)
+    // feeding into that shared musicGainNode, so the tension crossfade can
+    // ramp the balance between the two tracks independently of the overall
+    // volume/mute/ducking musicGainNode already handles - the crossfade
+    // never has to know or care about any of that.
+    let musicGainNode = null;
+    let bgTrackGain = null;
+    let tensionTrackGain = null;
+    function setupMusicGraph() {
+      if (musicGainNode) return;
+      ensureAudio();
+      musicGainNode = audioCtx.createGain();
+      musicGainNode.gain.value = musicMuted ? 0 : musicVolume;
+      musicGainNode.connect(audioCtx.destination);
+
+      bgTrackGain = audioCtx.createGain();
+      bgTrackGain.gain.value = 1; // fully audible until a crossfade says otherwise
+      audioCtx.createMediaElementSource(bgMusic).connect(bgTrackGain).connect(musicGainNode);
+
+      tensionTrackGain = audioCtx.createGain();
+      tensionTrackGain.gain.value = 0; // silent until the tension trigger fires
+      audioCtx.createMediaElementSource(tensionMusic).connect(tensionTrackGain).connect(musicGainNode);
+    }
+    function applyMusicVolume() {
+      if (musicGainNode) musicGainNode.gain.value = musicMuted ? 0 : musicVolume;
+    }
+    function setMusicVolume(v) { musicVolume = v; applyMusicVolume(); }
+    function setMusicMuted(muted) {
+      musicMuted = muted;
+      applyMusicVolume();
+      const label = muted ? '🎵 Music: Off' : '🎵 Music: On';
+      document.getElementById('btn-toggle-music').textContent = label;
+      document.getElementById('btn-toggle-music-home').style.opacity = muted ? '0.4' : '1';
+    }
+    // Called from beep() on every SFX hit - briefly dips the music gain then
+    // ramps it back, so a fold/check/call/etc beep is always audible over it.
+    function duckMusic() {
+      if (!musicGainNode || musicMuted) return;
+      const now = audioCtx.currentTime;
+      const target = musicVolume;
+      musicGainNode.gain.cancelScheduledValues(now);
+      musicGainNode.gain.setValueAtTime(musicGainNode.gain.value, now);
+      musicGainNode.gain.linearRampToValueAtTime(target * 0.15, now + 0.05);
+      musicGainNode.gain.linearRampToValueAtTime(target, now + 0.4);
+    }
+
+    // ===== Adaptive tension music =====
+    // Ramps the two per-track gains in opposite directions over 1.5s - a
+    // real crossfade (tension layers OVER the bed, ducked but not silenced,
+    // rather than one track cutting out while the other cuts in). A short
+    // cooldown between toggles stops the pot-fraction threshold from
+    // flapping the crossfade back and forth if it hovers right at the line
+    // across a couple of rapid state updates.
+    let tensionActive = false;
+    let lastTensionToggleAt = 0;
+    const TENSION_RAMP_SECONDS = 1.5;
+    const TENSION_COOLDOWN_MS = 2000;
+    function setTensionActive(active) {
+      if (active === tensionActive) return;
+      const now = Date.now();
+      if (now - lastTensionToggleAt < TENSION_COOLDOWN_MS) return;
+      lastTensionToggleAt = now;
+      tensionActive = active;
+      if (!bgTrackGain || !tensionTrackGain) return; // music graph not set up yet - nothing to ramp
+      if (active && musicStarted) tensionMusic.play().catch(() => {});
+      const t = audioCtx.currentTime;
+      bgTrackGain.gain.cancelScheduledValues(t);
+      bgTrackGain.gain.setValueAtTime(bgTrackGain.gain.value, t);
+      bgTrackGain.gain.linearRampToValueAtTime(active ? 0.15 : 1, t + TENSION_RAMP_SECONDS);
+      tensionTrackGain.gain.cancelScheduledValues(t);
+      tensionTrackGain.gain.setValueAtTime(tensionTrackGain.gain.value, t);
+      tensionTrackGain.gain.linearRampToValueAtTime(active ? 1 : 0, t + TENSION_RAMP_SECONDS);
+    }
+    // Pure threshold decision lives in tension-music.js (testable without a
+    // real Audio/browser environment) - this just feeds it the live state
+    // and acts on the answer. Called from updateGameState() on every push.
+    function checkTensionTrigger(state) {
+      if (homeVisible || !window.TensionMusic) { setTensionActive(false); return; }
+      setTensionActive(window.TensionMusic.computeTensionActive(state));
+    }
+
+    // Safe to call anytime, and safe to call more than once before it
+    // actually succeeds - musicStarted only flips true once play() actually
+    // resolves, not just because it was attempted. Most browsers block this
+    // outright without a user gesture (the .catch() below is the normal,
+    // expected outcome there), but a small number of returning visitors'
+    // browsers permit it based on site-engagement history, so it's worth a
+    // free, silent attempt rather than only ever trying after a gesture.
+    function ensureMusicStarted() {
+      if (musicStarted) return;
+      setupMusicGraph();
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      bgMusic.play().then(() => { musicStarted = true; }).catch(() => {});
+    }
+    function pauseAllMusic() { bgMusic.pause(); tensionMusic.pause(); }
+    function resumeCurrentMusic() {
+      if (!musicStarted) return;
+      bgMusic.play().catch(() => {});
+      if (tensionActive) tensionMusic.play().catch(() => {});
+    }
+    // Browsers require a user gesture before audio can play in the common
+    // case - start on the very first interaction anywhere on the page
+    // rather than instrumenting every individual button that could
+    // plausibly be clicked first. The call below this, outside any
+    // listener, is the best-effort attempt for the browsers that don't
+    // require one; this pair is what actually guarantees music starts
+    // for everyone else.
+    document.addEventListener('pointerdown', ensureMusicStarted, { once: true });
+    document.addEventListener('keydown', ensureMusicStarted, { once: true });
+    ensureMusicStarted();
 
     // ===== Card Rendering =====
     function cHTML(c) {
@@ -461,10 +1132,27 @@
       const r=RD[c.rank]||c.rank, s=SS[c.suit]||c.suit, cl=SC[c.suit]||'#1a1a2e';
       return '<div class="card card-f" style="color:'+cl+'"><div class="crt">'+r+'</div><div class="csc">'+s+'</div><div class="crb">'+r+'</div></div>';
     }
+    // Exposed so the Learn tab's own script (learn.js, a separate self-mounting
+    // file) can render real card visuals instead of duplicating this logic.
+    window.cHTML = cHTML;
     function csHTML(c,fd) {
       if (fd||!c||c.rank===0) return '<span class="cs csb"></span>';
       const r=RD[c.rank]||c.rank, s=SS[c.suit]||c.suit, cl=SC[c.suit]||'#1a1a2e';
       return '<span class="cs" style="color:'+cl+'">'+r+s+'</span>';
+    }
+
+    // ===== Toasts (viewport-anchored, independent of which page/modal is showing) =====
+    function showToast(text, opts) {
+      const container = document.getElementById('toast-container');
+      const el = document.createElement('div');
+      el.className = 'toast' + (opts && opts.className ? ' ' + opts.className : '');
+      el.textContent = text;
+      container.appendChild(el);
+      requestAnimationFrame(() => { el.classList.add('show'); });
+      setTimeout(() => {
+        el.classList.remove('show');
+        setTimeout(() => { if (el.parentNode) el.parentNode.removeChild(el); }, 400);
+      }, (opts && opts.durationMs) || 2800);
     }
 
     // ===== Action Popup =====
@@ -485,19 +1173,506 @@
     }
 
     // ===== Home Screen =====
-    // Difficulty boxes
-    document.querySelectorAll('.diff-box').forEach(box => {
+    // Difficulty boxes (excludes the Experimental tab's own boxes below -
+    // those share the .diff-box visual style but aren't part of the homepage
+    // difficulty selection or its background theming).
+    document.querySelectorAll('.diff-box:not(.exp-box)').forEach(box => {
       box.addEventListener('click', () => {
-        document.querySelectorAll('.diff-box').forEach(b => b.classList.remove('selected'));
+        document.querySelectorAll('.diff-box:not(.exp-box)').forEach(b => b.classList.remove('selected'));
         box.classList.add('selected');
         document.getElementById('input-difficulty').value = box.dataset.diff;
-        // Update home screen background based on difficulty
-        const home = document.getElementById('home-screen');
-        home.setAttribute('data-diff', box.dataset.diff);
+        // Update site background based on difficulty
+        const shell = document.getElementById('site-shell');
+        shell.setAttribute('data-diff', box.dataset.diff);
       });
     });
     // Select Easy by default
     document.querySelector('.diff-box[data-diff="easy"]').classList.add('selected');
+
+    // ===== Experimental Bots =====
+    document.querySelectorAll('.exp-box').forEach(box => {
+      box.addEventListener('click', () => {
+        document.querySelectorAll('.exp-box').forEach(b => b.classList.remove('selected'));
+        box.classList.add('selected');
+        document.getElementById('input-experimental-difficulty').value = box.dataset.diff;
+      });
+    });
+    document.querySelector('.exp-box[data-diff="drunk"]').classList.add('selected');
+    document.getElementById('btn-start-experimental').addEventListener('click', () => {
+      document.getElementById('input-difficulty').value = document.getElementById('input-experimental-difficulty').value;
+      setRankedModeUI(false);
+      startGameFlow();
+    });
+
+    // ===== Site Tabs (Play / Range Trainer / Learn) =====
+    function showSitePage(pageName) {
+      document.querySelectorAll('.site-tab').forEach(t => t.classList.toggle('active', t.dataset.page === pageName));
+      document.querySelectorAll('.site-page').forEach(p => p.classList.toggle('hidden', p.id !== 'page-' + pageName));
+    }
+    document.querySelectorAll('.site-tab').forEach(tab => {
+      tab.addEventListener('click', () => showSitePage(tab.dataset.page));
+    });
+    document.getElementById('site-logo').addEventListener('click', (e) => {
+      e.preventDefault();
+      showSitePage('play');
+    });
+    document.getElementById('link-learn-more').addEventListener('click', () => showSitePage('learn'));
+    document.getElementById('link-range-trainer').addEventListener('click', () => showSitePage('trainer'));
+
+    // ===== Accounts (login/signup) =====
+    let currentUser = null;
+    let rankedMode = false;
+
+    function setRankedModeUI(ranked) {
+      rankedMode = ranked;
+      // Gives the whole in-game background its own gold, competitive look
+      // while ranked, distinct from unranked's per-difficulty coloring, so
+      // the two are visually obvious beyond just the header pill/label.
+      document.getElementById('app').classList.toggle('ranked-table', ranked);
+      // Ranked stats are tied to the account, so the name can't be freely
+      // edited there the way an unranked nickname can be.
+      const usernameInput = document.getElementById('input-username');
+      if (ranked && currentUser) {
+        usernameInput.value = currentUser.displayName;
+        usernameInput.disabled = true;
+      } else {
+        usernameInput.disabled = false;
+      }
+    }
+
+    // Reflects the logged-in user's equipped cosmetics (or the defaults for a
+    // guest) onto #app as data attributes - the actual look is pure CSS keyed
+    // off these (see #app[data-cardback=...]/#app[data-felt=...] rules),
+    // same pattern as difficulty theming's data-diff.
+    function applyEquippedCosmetics() {
+      const appEl = document.getElementById('app');
+      appEl.setAttribute('data-cardback', (currentUser && currentUser.equippedCardBack) || 'classic');
+      appEl.setAttribute('data-felt', (currentUser && currentUser.equippedFeltColor) || 'green');
+    }
+
+    function updateAuthUI() {
+      applyEquippedCosmetics();
+      document.getElementById('btn-open-auth').classList.toggle('hidden', !!currentUser);
+      document.getElementById('auth-user-chip').classList.toggle('hidden', !currentUser);
+      document.getElementById('guest-save-progress-hint').classList.toggle('hidden', !!currentUser);
+      // The in-game header's own username (top-left, "Name (You)") doubles as
+      // a profile shortcut while logged in - there's no separate nav visible
+      // once a hand is in progress. Guests have no profile to show, so it
+      // stays plain text for them.
+      document.getElementById('hu').classList.toggle('hu-clickable', !!currentUser);
+      if (currentUser) {
+        document.getElementById('auth-user-name').textContent = currentUser.displayName;
+        document.getElementById('auth-user-coins-count').textContent = currentUser.coins || 0;
+        const badgeEl = document.getElementById('auth-user-badge');
+        if (window.RankBadges && currentUser.rank) {
+          badgeEl.innerHTML = window.RankBadges.render(currentUser.rank.key, currentUser.rank.sub, 20);
+          badgeEl.title = currentUser.rank.label + ' - ' + currentUser.totalXp + ' XP';
+        }
+        // Show the real account name instead of the generic "You" default -
+        // but don't clobber a nickname someone deliberately typed in.
+        const usernameInput = document.getElementById('input-username');
+        const current = usernameInput.value.trim();
+        if (!current || current === 'You') usernameInput.value = currentUser.displayName;
+      }
+      // Ranked play requires a logged-in account - drop back to Unranked on logout
+      // rather than leaving a Ranked selection that can no longer actually apply.
+      if (!currentUser && rankedMode) setRankedModeUI(false);
+    }
+
+    // The socket's handshake cookies are captured once, at connection time -
+    // logging in/out afterward changes the ppAuth cookie via a plain HTTP
+    // response, which an already-open socket never sees. Forcing a reconnect
+    // here is what makes socket.data.user (server-side) pick up the change.
+    // Safe to do any time login/signup/logout can actually happen from, since
+    // the auth UI only exists on the site-shell (never mid-hand): the
+    // per-session TableGame itself is unaffected - reconnecting re-attaches
+    // to the same ppSession-cookie-identified session, not a new one.
+    function reconnectSocketForAuthChange() {
+      socket.disconnect();
+      socket.connect();
+    }
+
+    async function refreshAuthState() {
+      let hasUnclaimedDailyReward = false;
+      try {
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        currentUser = data.user || null;
+        hasUnclaimedDailyReward = !!data.hasUnclaimedDailyReward;
+      } catch (e) {
+        currentUser = null;
+      }
+      updateAuthUI();
+      if (currentUser && hasUnclaimedDailyReward) showDailyRewardPrompt();
+    }
+
+    // ===== Daily reward =====
+    function showDailyRewardPrompt() {
+      document.getElementById('daily-reward-coins-amount').textContent = '🪙 Reward Ready';
+      document.getElementById('daily-reward-streak-text').textContent = 'Come back every day for a bigger one.';
+      const btn = document.getElementById('btn-claim-daily-reward');
+      btn.textContent = 'Claim';
+      document.getElementById('daily-reward-modal').classList.remove('hidden');
+    }
+    document.getElementById('btn-claim-daily-reward').addEventListener('click', async () => {
+      const modal = document.getElementById('daily-reward-modal');
+      const btn = document.getElementById('btn-claim-daily-reward');
+      if (btn.textContent !== 'Claim') { modal.classList.add('hidden'); return; }
+      btn.disabled = true;
+      try {
+        const res = await fetch('/api/claim-daily-reward', { method: 'POST' });
+        const result = await res.json();
+        if (res.ok && result.claimed) {
+          document.getElementById('daily-reward-coins-amount').textContent = '+' + result.amount + ' Coins';
+          document.getElementById('daily-reward-streak-text').textContent = 'Day ' + result.streakDay + ' streak';
+          if (currentUser) { currentUser.coins = result.coins; updateAuthUI(); }
+          btn.textContent = 'Nice!';
+        } else {
+          // Already claimed (e.g. this account open in another tab) - nothing more to show.
+          modal.classList.add('hidden');
+        }
+      } catch (e) {
+        modal.classList.add('hidden');
+      }
+      btn.disabled = false;
+    });
+
+    document.getElementById('btn-open-auth').addEventListener('click', () => {
+      document.getElementById('auth-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-auth').addEventListener('click', () => {
+      document.getElementById('auth-modal').classList.add('hidden');
+    });
+    document.querySelectorAll('.auth-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.auth-tab').forEach((t) => t.classList.toggle('active', t === tab));
+        document.getElementById('auth-form-login').classList.toggle('hidden', tab.dataset.authTab !== 'login');
+        document.getElementById('auth-form-signup').classList.toggle('hidden', tab.dataset.authTab !== 'signup');
+      });
+    });
+    document.getElementById('link-guest-signup').addEventListener('click', () => {
+      document.querySelector('.auth-tab[data-auth-tab="signup"]').click();
+      document.getElementById('auth-modal').classList.remove('hidden');
+    });
+
+    document.getElementById('auth-form-login').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const errEl = document.getElementById('login-error');
+      errEl.classList.add('hidden');
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) { errEl.textContent = data.error || 'Login failed.'; errEl.classList.remove('hidden'); return; }
+        currentUser = data.user;
+        updateAuthUI();
+        document.getElementById('auth-modal').classList.add('hidden');
+        e.target.reset();
+        reconnectSocketForAuthChange();
+        if (data.hasUnclaimedDailyReward) showDailyRewardPrompt();
+      } catch (err) {
+        errEl.textContent = 'Network error - please try again.';
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('auth-form-signup').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const displayName = document.getElementById('signup-name').value;
+      const email = document.getElementById('signup-email').value;
+      const password = document.getElementById('signup-password').value;
+      const errEl = document.getElementById('signup-error');
+      errEl.classList.add('hidden');
+      try {
+        const res = await fetch('/api/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, displayName }),
+        });
+        const data = await res.json();
+        if (!res.ok) { errEl.textContent = data.error || 'Sign up failed.'; errEl.classList.remove('hidden'); return; }
+        currentUser = data.user;
+        updateAuthUI();
+        document.getElementById('auth-modal').classList.add('hidden');
+        e.target.reset();
+        reconnectSocketForAuthChange();
+        if (data.hasUnclaimedDailyReward) showDailyRewardPrompt();
+      } catch (err) {
+        errEl.textContent = 'Network error - please try again.';
+        errEl.classList.remove('hidden');
+      }
+    });
+
+    document.getElementById('btn-logout').addEventListener('click', async () => {
+      try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+      currentUser = null;
+      updateAuthUI();
+      reconnectSocketForAuthChange();
+    });
+
+    refreshAuthState();
+
+    // ===== Profile (click your own name/badge in the nav) =====
+    async function openProfile() {
+      if (!currentUser) { console.warn('openProfile: no currentUser, nothing to show'); return; }
+      try {
+        const res = await fetch('/api/profile');
+        if (!res.ok) { console.error('openProfile: /api/profile returned', res.status); return; }
+        const p = await res.json();
+
+        document.getElementById('profile-name').textContent = p.displayName;
+        document.getElementById('profile-rank-label').textContent = p.rank.label;
+        if (window.RankBadges) {
+          document.getElementById('profile-badge').innerHTML = window.RankBadges.render(p.rank.key, p.rank.sub, 48);
+        }
+
+        const xpIntoTier = p.totalXp - p.rank.threshold;
+        const xpSpan = p.rank.nextThreshold != null ? p.rank.nextThreshold - p.rank.threshold : null;
+        const progressPct = xpSpan ? Math.min(100, (xpIntoTier / xpSpan) * 100) : 100;
+        document.getElementById('profile-xp-bar-fill').style.width = progressPct + '%';
+        document.getElementById('profile-xp-text').textContent = p.rank.nextThreshold != null
+          ? p.totalXp + ' / ' + p.rank.nextThreshold + ' XP to ' + p.rank.nextLabel
+          : p.totalXp + ' XP - top rank reached';
+        // Coins are account-wide, not ranked-scoped like the rest of this
+        // modal's data - currentUser already has the live value (synced via
+        // /api/me and coinsUpdate), no need for /api/profile to carry it too.
+        document.getElementById('profile-coins-count').textContent = currentUser.coins || 0;
+
+        document.getElementById('profile-hands-played').textContent = p.handsPlayed;
+        document.getElementById('profile-win-pct').textContent = p.winPct != null ? Math.round(p.winPct * 100) + '%' : '-';
+        document.getElementById('profile-hours-played').textContent = p.hoursPlayed.toFixed(1) + 'h';
+        document.getElementById('profile-net-profit').textContent = (p.netProfit >= 0 ? '+' : '') + '$' + p.netProfit;
+        document.getElementById('profile-biggest-pot').textContent = '$' + p.biggestPot;
+        document.getElementById('profile-biggest-win').textContent = '$' + p.biggestWin;
+        document.getElementById('profile-wsd-pct').textContent = p.wsdPct != null ? Math.round(p.wsdPct * 100) + '%' : '-';
+
+        document.getElementById('profile-modal').classList.remove('hidden');
+      } catch (e) { console.error('openProfile failed:', e); }
+    }
+    document.getElementById('btn-open-profile').addEventListener('click', openProfile);
+    document.getElementById('hu').addEventListener('click', () => { if (currentUser) openProfile(); });
+    document.getElementById('btn-close-profile').addEventListener('click', () => {
+      document.getElementById('profile-modal').classList.add('hidden');
+    });
+
+    // ===== Customize (cosmetics shop - card backs, table felt) =====
+    const CUSTOMIZE_SWATCH_LABEL = {
+      cardBack: { classic: 'Classic Blue', diamond: 'Diamond Weave', jewel: 'Ruby Jewel', suits: 'Suit Marks' },
+      feltColor: { green: 'Classic Green', blue: 'Royal Blue', crimson: 'Crimson', purple: 'Royal Purple' },
+    };
+
+    function customizeSwatchHTML(category, key) {
+      // Renders using the exact same CSS the real table/cards use (see
+      // #app[data-cardback=...]/#app[data-felt=...] in styles.css) by
+      // stamping the same data attribute onto a small preview element -
+      // what you see in the shop is exactly what you'll get equipped.
+      if (category === 'cardBack') {
+        return '<div class="customize-swatch" data-cardback="' + key + '"><div class="card card-b customize-swatch-card"></div></div>';
+      }
+      return '<div class="customize-swatch" data-felt="' + key + '"><div class="customize-swatch-felt"></div></div>';
+    }
+
+    function renderCustomizeGrid(gridEl, category, items) {
+      gridEl.innerHTML = items.map((item) => {
+        const label = CUSTOMIZE_SWATCH_LABEL[category][item.key] || item.name;
+        let action;
+        if (item.equipped) {
+          action = '<span class="customize-equipped-label">Equipped</span>';
+        } else if (item.owned) {
+          action = '<button class="sec-btn customize-action-btn" data-action="equip" data-category="' + category + '" data-key="' + item.key + '">Equip</button>';
+        } else {
+          action = '<button class="sec-btn customize-action-btn" data-action="unlock" data-category="' + category + '" data-key="' + item.key + '">🪙 ' + item.cost + '</button>';
+        }
+        return (
+          '<div class="customize-item">' +
+            customizeSwatchHTML(category, item.key) +
+            '<div class="customize-item-name">' + label + '</div>' +
+            action +
+          '</div>'
+        );
+      }).join('');
+    }
+
+    async function loadCustomizeShop() {
+      const res = await fetch('/api/cosmetics');
+      if (!res.ok) { console.error('loadCustomizeShop: /api/cosmetics returned', res.status); return; }
+      const data = await res.json();
+      document.getElementById('customize-coins-count').textContent = data.coins;
+      renderCustomizeGrid(document.getElementById('customize-cardback-grid'), 'cardBack', data.cardBack);
+      renderCustomizeGrid(document.getElementById('customize-felt-grid'), 'feltColor', data.feltColor);
+    }
+
+    async function openCustomize() {
+      if (!currentUser) return;
+      document.getElementById('customize-modal').classList.remove('hidden');
+      try { await loadCustomizeShop(); } catch (e) { console.error('openCustomize failed:', e); }
+    }
+    document.getElementById('btn-open-customize-nav').addEventListener('click', openCustomize);
+    document.getElementById('btn-close-customize').addEventListener('click', () => {
+      document.getElementById('customize-modal').classList.add('hidden');
+    });
+
+    document.getElementById('customize-modal').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.customize-action-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      const { action, category, key } = btn.dataset;
+      try {
+        const res = await fetch('/api/cosmetics/' + action, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ category, key }),
+        });
+        const result = await res.json();
+        if (!res.ok) { alert(result.error || 'Something went wrong.'); btn.disabled = false; return; }
+        if (action === 'equip') {
+          if (category === 'cardBack') currentUser.equippedCardBack = key;
+          else currentUser.equippedFeltColor = key;
+          applyEquippedCosmetics();
+        } else if (result.coins !== undefined) {
+          currentUser.coins = result.coins;
+          updateAuthUI();
+        }
+        await loadCustomizeShop();
+      } catch (err) {
+        console.error('Customize action failed:', err);
+        btn.disabled = false;
+      }
+    });
+
+    // ===== Leaderboard (always visible on the Play page, no click needed) =====
+    function leaderboardRowHTML(entry, isYou) {
+      const badge = window.RankBadges ? window.RankBadges.render(entry.tier.key, entry.tier.sub, 22) : '';
+      return (
+        '<div class="lb-row' + (isYou ? ' lb-you' : '') + '">' +
+          '<span class="lb-rank">#' + entry.rank + '</span>' +
+          '<span class="lb-badge">' + badge + '</span>' +
+          '<span class="lb-name">' + escapeHtml(entry.displayName) + '</span>' +
+          '<span class="lb-tier">' + entry.tier.label + '</span>' +
+          '<span class="lb-xp">' + entry.totalXp + ' XP</span>' +
+        '</div>'
+      );
+    }
+
+    let leaderboardPeriod = 'all';
+
+    async function loadLeaderboard(period) {
+      if (period) leaderboardPeriod = period;
+      const listEl = document.getElementById('home-leaderboard-list');
+      const youRowEl = document.getElementById('home-leaderboard-you-row');
+      listEl.innerHTML = '<p class="lb-loading">Loading...</p>';
+      youRowEl.classList.add('hidden');
+      try {
+        const res = await fetch('/api/leaderboard?period=' + leaderboardPeriod);
+        const data = await res.json();
+        if (!data.leaderboard.length) {
+          listEl.innerHTML = '<p class="lb-loading">' + (leaderboardPeriod === 'week' ? 'No ranked XP earned this week yet - be the first!' : 'No ranked players yet - be the first!') + '</p>';
+        } else {
+          listEl.innerHTML = data.leaderboard.map((e) => leaderboardRowHTML(e, !!(data.you && e.id === data.you.id))).join('');
+        }
+        // "you" is only rendered separately (pinned below) when outside the
+        // fetched top list - otherwise their row's already highlighted above.
+        if (data.you && !data.leaderboard.some((e) => e.id === data.you.id)) {
+          youRowEl.innerHTML = leaderboardRowHTML(data.you, true);
+          youRowEl.classList.remove('hidden');
+        }
+      } catch (e) {
+        listEl.innerHTML = '<p class="lb-loading">Couldn\'t load the leaderboard - please try again.</p>';
+      }
+    }
+
+    document.querySelectorAll('.lb-period-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.lb-period-tab').forEach((t) => t.classList.toggle('active', t === tab));
+        loadLeaderboard(tab.dataset.period);
+      });
+    });
+
+    loadLeaderboard('all');
+
+    // ===== Private Rooms (Play with Friends) =====
+    function enterRoomView(code, isHost) {
+      roomMode = true;
+      roomCode = code;
+      roomIsHost = isHost;
+      setRankedModeUI(false); // rooms are always unranked - never inherit a stale ranked background from a prior solo game
+      document.getElementById('room-modal').classList.add('hidden');
+      document.getElementById('hu').textContent = getDisplayName(playerName);
+      document.getElementById('hroom').textContent = 'Room: ' + code;
+      document.getElementById('hroom').classList.remove('hidden');
+      // Difficulty and Stats/Hand-Replay are solo/bot-only concepts - hide
+      // rather than show data that would be meaningless (or empty) in a room.
+      document.getElementById('hm').classList.add('hidden');
+      document.getElementById('btn-toggle-stats').classList.add('hidden');
+      document.getElementById('btn-analyze-hand').classList.add('hidden');
+      homeVisible = false;
+      document.getElementById('site-shell').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('pre-hand-overlay').classList.add('hidden'); // no bots to configure in a room
+      ensureMusicStarted();
+      // The personalized gameState for this room may have already arrived
+      // (sent synchronously server-side, slightly before this ack callback
+      // runs) and been ignored because roomMode wasn't true yet - re-render
+      // with it now rather than waiting for the next unrelated broadcast.
+      if (lastGameState) updateGameState(lastGameState);
+    }
+
+    document.getElementById('btn-open-room').addEventListener('click', () => {
+      document.getElementById('room-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-close-room').addEventListener('click', () => {
+      document.getElementById('room-modal').classList.add('hidden');
+    });
+    document.querySelectorAll('.room-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.room-tab').forEach((t) => t.classList.toggle('active', t === tab));
+        document.getElementById('room-form-create').classList.toggle('hidden', tab.dataset.roomTab !== 'create');
+        document.getElementById('room-form-join').classList.toggle('hidden', tab.dataset.roomTab !== 'join');
+      });
+    });
+
+    document.getElementById('room-form-create').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const displayName = document.getElementById('room-create-name').value.trim() || 'Player';
+      const errEl = document.getElementById('room-create-error');
+      errEl.classList.add('hidden');
+      const roomSettings = {
+        startingStack: parseInt(document.getElementById('room-create-stack').value, 10),
+        smallBlind: parseInt(document.getElementById('room-create-sb').value, 10),
+        bigBlind: parseInt(document.getElementById('room-create-bb').value, 10),
+      };
+      socket.emit('createRoom', { displayName, settings: roomSettings }, (res) => {
+        if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Could not create room.'; errEl.classList.remove('hidden'); return; }
+        playerName = displayName;
+        enterRoomView(res.code, res.isHost);
+      });
+    });
+
+    document.getElementById('room-form-join').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const code = document.getElementById('room-join-code').value.trim().toUpperCase();
+      const displayName = document.getElementById('room-join-name').value.trim() || 'Player';
+      const errEl = document.getElementById('room-join-error');
+      errEl.classList.add('hidden');
+      socket.emit('joinRoom', { code, displayName }, (res) => {
+        if (!res || !res.ok) { errEl.textContent = (res && res.error) || 'Could not join room.'; errEl.classList.remove('hidden'); return; }
+        playerName = displayName;
+        enterRoomView(res.code, res.isHost);
+      });
+    });
+
+    document.getElementById('btn-room-start-game').addEventListener('click', () => {
+      socket.emit('startGame');
+    });
+    document.getElementById('btn-room-leave').addEventListener('click', () => {
+      leaveToHome();
+    });
 
     document.getElementById('btn-show-settings').addEventListener('click',()=>{
       document.getElementById('settings-modal').classList.remove('hidden');
@@ -522,20 +1697,101 @@
       document.getElementById('bc-fold3bet-val').textContent = this.value + '%';
     });
 
-    document.getElementById('btn-home-start').addEventListener('click',()=>{
+    // Shared by the Unranked and Experimental start buttons (ranked has its
+    // own dedicated setup screen and fixed settings, wired separately below).
+    // Experimental bots (Drunk/Bluffer/Rock/Maniac/The Boardroom) all have
+    // fixed, hardcoded personalities - the Configure Bots screen's sliders
+    // only ever do anything for the Expert difficulty's botCustomization,
+    // so showing it before an experimental game would just be a config
+    // screen that silently does nothing.
+    const EXPERIMENTAL_DIFFICULTIES = Array.from(document.querySelectorAll('.exp-box')).map((box) => box.dataset.diff);
+
+    function startGameFlow() {
       const difficulty = document.getElementById('input-difficulty').value;
       settings.difficulty = difficulty;
       playerName = document.getElementById('input-username').value.trim() || 'You';
       document.getElementById('hm').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
       document.getElementById('hu').textContent = getDisplayName(playerName);
+      document.getElementById('app').setAttribute('data-diff', difficulty);
       homeVisible = false;
-      document.getElementById('home-screen').classList.add('hidden');
+      document.getElementById('site-shell').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
-      document.getElementById('pre-hand-overlay').classList.remove('hidden');
       // Force-hide the pause modal immediately - a fresh game should never open paused,
       // even if the server's isPaused flag hasn't round-tripped back to false yet.
       document.getElementById('pause-modal').classList.add('hidden');
-      socket.emit('updateSettings', { ...settings, playerName, difficulty });
+      ensureMusicStarted();
+      socket.emit('updateSettings', { ...settings, playerName, difficulty, ranked: rankedMode });
+      if (EXPERIMENTAL_DIFFICULTIES.includes(difficulty)) {
+        document.getElementById('pre-hand-overlay').classList.add('hidden');
+        socket.emit('startGame');
+      } else {
+        document.getElementById('pre-hand-overlay').classList.remove('hidden');
+      }
+    }
+    document.getElementById('btn-start-unranked').addEventListener('click', () => {
+      setRankedModeUI(false);
+      startGameFlow();
+    });
+    document.getElementById('btn-start-ranked').addEventListener('click', () => {
+      if (!currentUser) {
+        document.getElementById('auth-modal').classList.remove('hidden');
+        return;
+      }
+      document.getElementById('ranked-setup-modal').classList.remove('hidden');
+    });
+
+    // ===== Ranked Setup =====
+    // Display only - mirrors src/rankTiers.js's DIFFICULTY_XP exactly. The
+    // server is always the authority on the real (pot-scaled) amount; this
+    // is just so the player knows roughly what's at stake before playing.
+    const CLIENT_DIFFICULTY_XP = { easy: { win: 8, loss: -4 }, medium: { win: 14, loss: -8 }, hard: { win: 22, loss: -14 }, expert: { win: 32, loss: -22 } };
+    const TOURNAMENT_KEY_FOR_HANDS = { 0: 'single', 10: 'short', 25: 'standard', 50: 'long' };
+    let rankedSetupDifficulty = 'easy';
+    let rankedSetupHands = 0;
+
+    function updateRankedSetupXpInfo() {
+      const xp = CLIENT_DIFFICULTY_XP[rankedSetupDifficulty];
+      document.getElementById('ranked-setup-xp-info').textContent =
+        'Roughly +' + xp.win + ' XP for a win, ' + xp.loss + ' XP for a loss at this difficulty - scales with the size of the pot.';
+    }
+    updateRankedSetupXpInfo();
+
+    document.querySelectorAll('#ranked-setup-diff-row .ranked-setup-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#ranked-setup-diff-row .ranked-setup-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        rankedSetupDifficulty = btn.dataset.diff;
+        updateRankedSetupXpInfo();
+      });
+    });
+    document.querySelectorAll('#ranked-setup-length-row .ranked-setup-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#ranked-setup-length-row .ranked-setup-btn').forEach((b) => b.classList.toggle('active', b === btn));
+        rankedSetupHands = parseInt(btn.dataset.hands, 10);
+      });
+    });
+    document.getElementById('btn-close-ranked-setup').addEventListener('click', () => {
+      document.getElementById('ranked-setup-modal').classList.add('hidden');
+    });
+
+    document.getElementById('btn-ranked-setup-begin').addEventListener('click', () => {
+      document.getElementById('ranked-setup-modal').classList.add('hidden');
+      document.getElementById('input-difficulty').value = rankedSetupDifficulty;
+      setRankedModeUI(true);
+      playerName = currentUser.displayName; // ranked always plays under the account name
+      document.getElementById('hm').textContent = rankedSetupDifficulty.charAt(0).toUpperCase() + rankedSetupDifficulty.slice(1);
+      document.getElementById('hu').textContent = getDisplayName(playerName);
+      document.getElementById('app').setAttribute('data-diff', rankedSetupDifficulty);
+      homeVisible = false;
+      document.getElementById('site-shell').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('btn-toggle-turbo').classList.add('hidden'); // no turbo allowed in ranked
+      ensureMusicStarted();
+      // Ranked skips the "Configure Bots..." overlay entirely (fixed, standardized
+      // bot behavior is part of "consistent across all competitors") - start
+      // the hand immediately rather than waiting for a separate confirm click.
+      socket.emit('updateSettings', { difficulty: rankedSetupDifficulty, ranked: true, tournamentKey: TOURNAMENT_KEY_FOR_HANDS[rankedSetupHands] || 'single' });
+      socket.emit('startGame');
     });
     document.getElementById('btn-start-hand').addEventListener('click',()=>{
       // Send bot customization to server
@@ -551,13 +1807,34 @@
     });
     function leaveToHome() {
       homeVisible = true;
-      socket.emit('pauseGame'); // stop the shared game (bot turns, hand-complete sounds) while we're away
+      if (roomMode) {
+        // Leaving a room detaches this one socket - the seat itself persists
+        // (server-side grace period) so rejoining with the same code resumes
+        // it, unlike solo's pauseGame which freezes the single shared session.
+        socket.emit('leaveRoom');
+        roomMode = false; roomCode = null; roomIsHost = false;
+        document.getElementById('hroom').classList.add('hidden');
+        document.getElementById('hm').classList.remove('hidden');
+        document.getElementById('btn-toggle-stats').classList.remove('hidden');
+        document.getElementById('btn-analyze-hand').classList.remove('hidden');
+        document.getElementById('btn-pause-game').classList.remove('hidden');
+      } else {
+        socket.emit('pauseGame'); // stop the shared game (bot turns, hand-complete sounds) while we're away
+      }
       stopTimer();
       document.getElementById('app').classList.add('hidden');
       document.getElementById('stats-panel').classList.add('hidden');
       document.getElementById('analyzer-modal').classList.add('hidden');
       document.getElementById('pre-hand-overlay').classList.add('hidden');
-      document.getElementById('home-screen').classList.remove('hidden');
+      document.getElementById('room-lobby-overlay').classList.add('hidden');
+      document.getElementById('rank-results-modal').classList.add('hidden');
+      document.getElementById('site-shell').classList.remove('hidden');
+      // Turbo/the username field are only ever restricted while actually
+      // inside a ranked game - always safe to restore once back home.
+      document.getElementById('btn-toggle-turbo').classList.remove('hidden');
+      document.getElementById('input-username').disabled = false;
+      showSitePage('play');
+      loadLeaderboard(); // refresh in case ranked XP just moved while away
     }
     document.getElementById('logo-link').addEventListener('click',(e)=>{
       e.preventDefault();
@@ -643,22 +1920,19 @@
       if (!data) return;
       const hole = data.holeCards || [];
       const board = data.board || [];
-      document.getElementById('aa-hand').textContent = hole.map(c => RD[c.rank] + SS[c.suit]).join(' ') || '—';
-      document.getElementById('aa-board').textContent = board.length > 0 ? board.map(c => RD[c.rank] + SS[c.suit]).join(' ') : '—';
-      document.getElementById('aa-best').textContent = data.yourBestHandDescription || '—';
+      document.getElementById('aa-hand').textContent = hole.map(c => RD[c.rank] + SS[c.suit]).join(' ') || '-';
+      document.getElementById('aa-board').textContent = board.length > 0 ? board.map(c => RD[c.rank] + SS[c.suit]).join(' ') : '-';
+      document.getElementById('aa-best').textContent = data.yourBestHandDescription || '-';
 
-      // Pot odds
-      const totalPot = data.pots ? data.pots.reduce((s,p) => s + p.amount, 0) : 0;
-      const youContributed = data.totalContributed && data.totalContributed['You'] ? data.totalContributed['You'] : 0;
-      const youWon = data.payouts && data.payouts['You'] ? data.payouts['You'] : 0;
-      document.getElementById('aa-pot-odds').textContent = totalPot > 0 ? (youContributed / totalPot * 100).toFixed(1) + '%' : '—';
-
-      // Result summary
-      const youNet = youWon - youContributed;
-      document.getElementById('aa-ev').textContent = (youNet >= 0 ? '+' : '') + '$' + youNet;
-      document.getElementById('aa-mistake').textContent = youNet < 0 ? '⚠️ Possible mistake' : '✅ Well played';
-      document.getElementById('aa-mistake').style.color = youNet < 0 ? '#ef5350' : '#4caf50';
-      document.getElementById('aa-your-action').textContent = youWon > 0 ? 'Profitable' : 'Lost the pot';
+      const tagEl = document.getElementById('aa-luck-tag');
+      if (data.luckTag) {
+        tagEl.classList.remove('hidden');
+        tagEl.className = 'aa-luck-tag-' + data.luckTag;
+        tagEl.textContent = (data.luckTag === 'unlucky' ? '😬 ' : '🍀 ') + data.luckLabel;
+      } else {
+        tagEl.className = 'hidden';
+        tagEl.textContent = '';
+      }
 
       renderStreetTabs(data);
       renderStreetDetail(data);
@@ -688,8 +1962,8 @@
       const eqEl = document.getElementById('as-equity');
       if (!snap) {
         boardEl.innerHTML = '';
-        potEl.textContent = '—';
-        eqEl.textContent = '—';
+        potEl.textContent = '-';
+        eqEl.textContent = '-';
         actionsEl.innerHTML = '';
         return;
       }
@@ -703,36 +1977,43 @@
           ? 'Computed exactly from a known all-in confrontation'
           : 'Monte Carlo estimate vs. however many opponents were still live at this point';
       } else {
-        eqEl.textContent = '—';
+        eqEl.textContent = '-';
         eqEl.title = '';
       }
       actionsEl.innerHTML = (snap.actions || []).map(a => {
         const amtStr = a.amount > 0 ? ' $' + a.amount : '';
         const actLabel = a.action.charAt(0).toUpperCase() + a.action.slice(1);
-        return '<div class="replay-step">' + a.actor + ': ' + actLabel + amtStr + '</div>';
+        const gradeBadge = a.grade ? ' <span class="replay-grade replay-grade-' + a.grade.tier + '">' + a.grade.label + '</span>' : '';
+        return '<div class="replay-step">' + escapeHtml(a.actor) + ': ' + actLabel + amtStr + gradeBadge + '</div>';
       }).join('') || '<div class="street-board-empty">No actions this street</div>';
     }
 
     // ===== Timer =====
+    // Circumference of the ring's r=18 circle - stroke-dashoffset counts down
+    // from 0 (full ring, full time left) to this value (empty ring, no time left).
+    const TTR_CIRCUMFERENCE = 2 * Math.PI * 18;
     function stopTimer() {
       if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-      document.getElementById('timer-container').classList.remove('active');
+      document.getElementById('turn-timer-ring').classList.add('hidden');
     }
     function startTimer(seconds) {
       stopTimer();
       if (seconds <= 0) return;
       timerTotal = seconds; timerRemaining = seconds;
-      const container = document.getElementById('timer-container');
-      const fill = document.getElementById('timer-bar-fill');
-      const text = document.getElementById('timer-text');
-      container.classList.add('active');
-      fill.className = ''; fill.style.width = '100%'; text.textContent = seconds + 's';
+      const ring = document.getElementById('turn-timer-ring');
+      const progress = document.getElementById('ttr-progress');
+      const text = document.getElementById('ttr-text');
+      ring.className = ''; // clears 'hidden' plus any warning/danger left over from last time
+      progress.style.strokeDasharray = TTR_CIRCUMFERENCE;
+      progress.style.strokeDashoffset = 0;
+      text.textContent = seconds;
       timerInterval = setInterval(() => {
         timerRemaining--;
         if (timerRemaining <= 0) { timerRemaining = 0; stopTimer(); sf(); socket.emit('playerAction', { action: 'fold' }); return; }
-        const pct = (timerRemaining / timerTotal) * 100;
-        fill.style.width = pct + '%'; text.textContent = timerRemaining + 's';
-        if (pct <= 20) fill.className = 'danger'; else if (pct <= 40) fill.className = 'warning'; else fill.className = '';
+        const pct = timerRemaining / timerTotal;
+        progress.style.strokeDashoffset = TTR_CIRCUMFERENCE * (1 - pct);
+        text.textContent = timerRemaining;
+        ring.className = pct <= 0.2 ? 'danger' : pct <= 0.4 ? 'warning' : '';
       }, 1000);
     }
 
@@ -819,20 +2100,55 @@
     let prevHandCount = 0;
     function updateGameState(state) {
       if (!state) return;
+      checkTensionTrigger(state);
       // Keep the pause modal in sync even on states where the rest of this function
       // bails out early (e.g. right after updateSettings resets gameStarted to false) -
       // otherwise it can get stuck visible from an earlier pause when a new game starts.
       document.getElementById('pause-modal').classList.toggle('hidden', !state.isPaused);
+      // Only let the game's pause state affect music while actually viewing the live
+      // table - leaving to home also sets isPaused (to freeze the background game),
+      // but that shouldn't pause the homepage music that should now be playing.
+      const shouldPauseMusicForGame = !!state.isPaused && !homeVisible;
+      if (shouldPauseMusicForGame !== musicPausedByGame) {
+        musicPausedByGame = shouldPauseMusicForGame;
+        if (musicPausedByGame) pauseAllMusic(); else resumeCurrentMusic();
+      }
       if (typeof state.turboMode === 'boolean' && state.turboMode !== turboEnabled) setTurboButtonState(state.turboMode);
+      document.getElementById('hranked').classList.toggle('hidden', !state.ranked);
+
+      if (roomMode) {
+        // Pause is host-only in a room (the server already refuses a
+        // non-host's pauseGame/resumeGame) - hide the button for everyone
+        // else so it isn't a dead, confusing control.
+        document.getElementById('btn-pause-game').classList.toggle('hidden', !roomIsHost);
+
+        const lobbyOverlay = document.getElementById('room-lobby-overlay');
+        lobbyOverlay.classList.toggle('hidden', !!state.gameStarted);
+        if (!state.gameStarted) {
+          document.getElementById('room-lobby-code').textContent = roomCode;
+          document.getElementById('room-lobby-players').innerHTML = (state.players || [])
+            .map((p) => '<div class="room-lobby-player">' + escapeHtml(p.displayName) + (p.id === state.viewerId ? ' (You)' : '') + '</div>')
+            .join('');
+          const enoughPlayers = (state.players || []).length >= 2;
+          document.getElementById('btn-room-start-game').classList.toggle('hidden', !roomIsHost);
+          document.getElementById('btn-room-start-game').disabled = !enoughPlayers;
+          document.getElementById('room-lobby-waiting').classList.toggle('hidden', roomIsHost);
+        }
+      }
+
       if (!state.gameStarted) return;
-      const isYou = p => p.type === 'human' || p.id === 'You' || p.id === playerName;
+      // Keyed off the server-assigned viewerId, not a hardcoded "You" - the
+      // only way this stays correct once a second real human (a private
+      // room) is at the same table, since both players have type: 'human'.
+      const isYou = p => p.id === state.viewerId;
 
       // Track last actions for popups
       if (state.lastActions) {
         const prevActions = window._prevLastActions || {};
         for (const [pid, act] of Object.entries(state.lastActions)) {
           if (!prevActions[pid] || prevActions[pid].action !== act.action || prevActions[pid].amount !== act.amount) {
-            showActionPopup(pid, act.action, act.amount);
+            const actor = state.players.find(p => p.id === pid);
+            showActionPopup(actor ? actor.displayName : pid, act.action, act.amount);
           }
         }
         window._prevLastActions = state.lastActions;
@@ -847,7 +2163,7 @@
       }
 
       document.getElementById('h-counter').textContent = 'Hand #' + (state.handCount||0);
-      document.getElementById('h-street').textContent = state.street ? state.street.charAt(0).toUpperCase() + state.street.slice(1) : '—';
+      document.getElementById('h-street').textContent = state.street ? state.street.charAt(0).toUpperCase() + state.street.slice(1) : '-';
       document.getElementById('h-pot').textContent = 'Pot $' + state.pot;
       document.getElementById('h-blinds').textContent = (state.smallBlind||10) + '/' + (state.bigBlind||20);
       document.getElementById('pot-value').textContent = '$' + state.pot;
@@ -864,7 +2180,7 @@
       if (state.complete) { turnEl.textContent = 'Hand Complete'; turnEl.className = ''; }
       else if (state.actingId) {
         const actingPlayer = state.players.find(p => p.id === state.actingId);
-        const actingName = actingPlayer && isYou(actingPlayer) ? 'Your Turn' : state.actingId + "'s Turn";
+        const actingName = actingPlayer && isYou(actingPlayer) ? 'Your Turn' : (actingPlayer ? actingPlayer.displayName : state.actingId) + "'s Turn";
         turnEl.textContent = actingName + '...';
         turnEl.className = 'active-turn';
       } else { turnEl.textContent = 'Waiting...'; turnEl.className = ''; }
@@ -880,7 +2196,7 @@
         const seatIndex = Number.isInteger(p.seat) ? p.seat % n : 0;
         const pos = positions[seatIndex] || { t:'50%', l:'50%' };
         const you = isYou(p);
-        const displayName = you ? getDisplayName(playerName) : p.id;
+        const displayName = you ? getDisplayName(playerName) : (p.displayName || p.id);
         const colorClass = p.colorClass || 'color-0';
         const el = document.createElement('div');
         const isActive = p.active && !state.complete;
@@ -902,7 +2218,7 @@
         }
         // Floating chip for active player
         const chipHTML = isActive ? '<div class="turn-chip"></div>' : '';
-        el.innerHTML = chipHTML + '<div class="sh"><span class="sn">' + displayName + '</span>' + badge + '</div><div class="sc">' + cards + '</div><div class="ss">$' + p.stack + '</div><div class="sbet ' + (p.contributed ? 'has' : '') + '">' + (p.contributed > 0 ? '$' + p.contributed : '') + '</div>' + (p.folded ? '<div class="sf">FOLD</div>' : '') + lastActHTML;
+        el.innerHTML = chipHTML + '<div class="sh"><span class="sn">' + escapeHtml(displayName) + '</span>' + badge + '</div><div class="sc">' + cards + '</div><div class="ss">$' + p.stack + '</div><div class="sbet ' + (p.contributed ? 'has' : '') + '">' + (p.contributed > 0 ? '$' + p.contributed : '') + '</div>' + (p.folded ? '<div class="sf">FOLD</div>' : '') + lastActHTML;
         container.appendChild(el);
       });
 
@@ -929,7 +2245,10 @@
         bar.style.display = 'none';
       }
       if (showActions) {
-        if (settings.shotClockSeconds > 0) startTimer(settings.shotClockSeconds);
+        // Server-confirmed value, not the client's own Game Config setting -
+        // ranked forces this to 15 regardless of what was picked locally, and
+        // trusting the local value here is exactly what let that be bypassed.
+        if (state.shotClockSeconds > 0) startTimer(state.shotClockSeconds);
         else stopTimer();
       } else { stopTimer(); }
       if (!showActions) { betArea.classList.add('hidden'); }
@@ -977,7 +2296,9 @@
           state.results.showdown.results.forEach(r => {
             const won = payouts[r.id] && payouts[r.id] > 0;
             const winSpan = won ? '<span class="sdw">+$' + payouts[r.id] + '</span>' : '';
-            html += '<div class="sd-row ' + (won ? 'win' : '') + '"><span>' + r.id + '</span><span class="sdh">' + (r.description || 'High Card') + '</span>' + winSpan + '</div>';
+            const rPlayer = state.players.find(p => p.id === r.id);
+            const rName = rPlayer ? rPlayer.displayName : r.id;
+            html += '<div class="sd-row ' + (won ? 'win' : '') + '"><span>' + escapeHtml(rName) + '</span><span class="sdh">' + (r.description || 'High Card') + '</span>' + winSpan + '</div>';
           });
         }
         document.getElementById('result-details').innerHTML = html;
@@ -998,7 +2319,13 @@
       });
       const wasNearBottom = hl.scrollTop + hl.clientHeight >= hl.scrollHeight - 30;
       hl.innerHTML = state.handHistory.map(l => {
-        let colored = l;
+        // Escape first, then highlight - a hand-history line can embed an
+        // untrusted display name (room mode lets anyone type one), so the
+        // raw text must never reach innerHTML unescaped. pid itself is
+        // always server-assigned (a session id, or "You"/a bot name in solo
+        // mode) and contains no HTML metacharacters, so matching it against
+        // the already-escaped string still highlights correctly.
+        let colored = escapeHtml(l);
         for (const [pid, color] of Object.entries(playerColors)) {
           const re = new RegExp('\\b' + pid + '\\b', 'g');
           colored = colored.replace(re, '<span style="color:' + color + ';font-weight:500">' + pid + '</span>');
@@ -1026,11 +2353,11 @@
       const npEl = document.getElementById('st-np');
       npEl.textContent = net >= 0 ? '+$' + net : '-$' + Math.abs(net);
       npEl.style.color = net >= 0 ? '#4caf50' : '#ef5350';
-      const roi = s.totalInvested > 0 ? ((net / s.totalInvested) * 100).toFixed(1) : '—';
-      document.getElementById('st-roi').textContent = roi !== '—' ? (net >= 0 ? '+' : '') + roi + '%' : '—';
+      const roi = s.totalInvested > 0 ? ((net / s.totalInvested) * 100).toFixed(1) : '-';
+      document.getElementById('st-roi').textContent = roi !== '-' ? (net >= 0 ? '+' : '') + roi + '%' : '-';
       document.getElementById('st-roi').style.color = s.totalInvested > 0 ? (net >= 0 ? '#4caf50' : '#ef5350') : 'rgba(255,255,255,0.4)';
       document.getElementById('st-vp').textContent = s.handsPlayed > 0 ? Math.round((s.vpipHands || 0) / s.handsPlayed * 100) + '%' : '0%';
-      const af = s.totalCalls > 0 ? ((s.totalBets + s.totalRaises) / s.totalCalls).toFixed(2) : '—';
+      const af = s.totalCalls > 0 ? ((s.totalBets + s.totalRaises) / s.totalCalls).toFixed(2) : '-';
       document.getElementById('st-af').textContent = af;
       document.getElementById('st-fp').textContent = s.totalActions > 0 ? Math.round(s.totalFolds / s.totalActions * 100) + '%' : '0%';
       document.getElementById('st-br').textContent = (s.totalBets + s.totalRaises);
@@ -1038,10 +2365,10 @@
       document.getElementById('st-ch').textContent = s.totalChecks;
 
       document.getElementById('st-pfr').textContent = s.handsPlayed > 0 ? Math.round((s.pfrHands || 0) / s.handsPlayed * 100) + '%' : '0%';
-      document.getElementById('st-3bet').textContent = s.threeBetOpportunities > 0 ? Math.round((s.threeBetHands || 0) / s.threeBetOpportunities * 100) + '%' : '—';
+      document.getElementById('st-3bet').textContent = s.threeBetOpportunities > 0 ? Math.round((s.threeBetHands || 0) / s.threeBetOpportunities * 100) + '%' : '-';
 
       document.getElementById('st-wtsd').textContent = s.handsPlayed > 0 ? Math.round((s.showdownsSeen || 0) / s.handsPlayed * 100) + '%' : '0%';
-      document.getElementById('st-wsd').textContent = s.showdownsSeen > 0 ? Math.round((s.showdownsWon || 0) / s.showdownsSeen * 100) + '%' : '—';
+      document.getElementById('st-wsd').textContent = s.showdownsSeen > 0 ? Math.round((s.showdownsWon || 0) / s.showdownsSeen * 100) + '%' : '-';
       document.getElementById('st-sdw').textContent = '$' + (s.showdownWinnings || 0);
       document.getElementById('st-nsdw').textContent = '$' + (s.nonShowdownWinnings || 0);
       document.getElementById('st-bw').textContent = '$' + (s.biggestWin || 0);
@@ -1049,7 +2376,7 @@
 
       const streak = s.currentStreak || 0;
       const streakEl = document.getElementById('st-streak');
-      if (streak === 0) { streakEl.textContent = '—'; streakEl.style.color = ''; }
+      if (streak === 0) { streakEl.textContent = '-'; streakEl.style.color = ''; }
       else { streakEl.textContent = (streak > 0 ? 'W' : 'L') + Math.abs(streak); streakEl.style.color = streak > 0 ? '#4caf50' : '#ef5350'; }
 
       if (state.sessionStart) {
@@ -1057,10 +2384,10 @@
         const elapsedMin = elapsedMs / 60000;
         const hh = Math.floor(elapsedMin / 60), mm = Math.floor(elapsedMin % 60), ss = Math.floor((elapsedMs / 1000) % 60);
         document.getElementById('st-session-time').textContent = hh > 0 ? `${hh}h ${mm}m` : `${mm}m ${ss}s`;
-        document.getElementById('st-hands-hr').textContent = elapsedMin > 0.5 ? Math.round(s.handsPlayed / (elapsedMin / 60)) : '—';
+        document.getElementById('st-hands-hr').textContent = elapsedMin > 0.5 ? Math.round(s.handsPlayed / (elapsedMin / 60)) : '-';
       } else {
-        document.getElementById('st-session-time').textContent = '—';
-        document.getElementById('st-hands-hr').textContent = '—';
+        document.getElementById('st-session-time').textContent = '-';
+        document.getElementById('st-hands-hr').textContent = '-';
       }
 
       const allInCount = s.allInHandsTracked || 0;
@@ -1075,8 +2402,8 @@
         luckEl.textContent = (luck >= 0 ? '+$' : '-$') + Math.abs(luck).toFixed(0);
         luckEl.style.color = luck >= 0 ? '#4caf50' : '#ef5350';
       } else {
-        evEl.textContent = '—'; evEl.style.color = '';
-        luckEl.textContent = '—'; luckEl.style.color = '';
+        evEl.textContent = '-'; evEl.style.color = '';
+        luckEl.textContent = '-'; luckEl.style.color = '';
       }
     }
 
@@ -1118,11 +2445,28 @@
       currentVolume = this.value / 100;
       document.getElementById('volume-val').textContent = this.value + '%';
     });
-    // Override beep to respect volume
+    // Override beep to respect volume (and duck the music bed so it's audible)
     const origBeep = beep;
-    beep = function(f,d,v=0.08,t='sine') {
-      try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v*currentVolume; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
+    beep = function(f,d,v=0.15,t='sine') {
+      try {
+        ensureAudio();
+        duckMusic();
+        const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v*currentVolume; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d);
+      } catch(e) {}
     };
+
+    document.getElementById('set-music-volume').addEventListener('input', function() {
+      setMusicVolume(this.value / 100);
+      document.getElementById('music-volume-val').textContent = this.value + '%';
+    });
+    document.getElementById('btn-toggle-music').addEventListener('click', () => {
+      ensureMusicStarted();
+      setMusicMuted(!musicMuted);
+    });
+    document.getElementById('btn-toggle-music-home').addEventListener('click', () => {
+      ensureMusicStarted();
+      setMusicMuted(!musicMuted);
+    });
 
     // ===== Pause/Resume Buttons =====
     document.getElementById('btn-pause-game').addEventListener('click', () => {
@@ -1147,20 +2491,111 @@
     });
 
     // ===== Socket Events =====
-    socket.on('gameState', updateGameState);
+    // Cached so entering a room view (which happens slightly AFTER the
+    // createRoom/joinRoom ack, but can arrive after the first personalized
+    // gameState push for that same room) can force an immediate re-render
+    // instead of waiting for whatever the next broadcast happens to be.
+    let lastGameState = null;
+    socket.on('gameState', (state) => { lastGameState = state; updateGameState(state); });
     socket.on('botTurn', () => { if (!homeVisible) sbotTurn(); });
+    socket.on('botChat', (payload) => { showBotChatBubble(payload.playerId, payload.text); });
     socket.on('handComplete', (data) => {
       const felt = document.getElementById('table-felt');
       felt.classList.remove('ripple-win', 'ripple-lose');
       void felt.offsetWidth;
       felt.classList.add(data.youWon ? 'ripple-win' : 'ripple-lose');
-      setTimeout(() => felt.classList.remove('ripple-win', 'ripple-lose'), 2000);
+      setTimeout(() => felt.classList.remove('ripple-win', 'ripple-lose'), 2200);
+
+      // Ranked shows the full rank-progress screen after EVERY hand, not
+      // just once the whole session/tournament ends - handComplete is
+      // emitted last (after both xpEarned and, if this was the session's
+      // final hand, rankedSessionComplete), so by the time it arrives both
+      // lastXpUpdate and pendingSessionComplete already reflect this exact
+      // hand with no race to coordinate.
+      if (lastGameState && lastGameState.ranked && lastXpUpdate) {
+        showRankResultsScreen(lastXpUpdate, pendingSessionComplete);
+        lastXpUpdate = null;
+        pendingSessionComplete = null;
+      }
     });
     socket.on('pauseGame', () => {
       document.getElementById('pause-modal').classList.remove('hidden');
     });
     socket.on('resumeGame', () => {
       document.getElementById('pause-modal').classList.add('hidden');
+    });
+    // Cached so handComplete (fired moments later, once the whole hand - and
+    // possibly the whole session/tournament - is done) can render the
+    // results screen from the most recent XP swing without the server
+    // needing to recompute/resend it.
+    let lastXpUpdate = null;
+    let pendingSessionComplete = null;
+    socket.on('xpUpdate', (data) => {
+      lastXpUpdate = data;
+      if (currentUser) {
+        currentUser.totalXp = data.totalXp;
+        currentUser.rank = data.rank;
+        updateAuthUI();
+      }
+    });
+    socket.on('rankedSessionComplete', (payload) => { pendingSessionComplete = payload; });
+    // Fires for a logged-in player after any hand, any mode - keeps the nav
+    // balance and profile modal in sync live, same pattern as xpUpdate above.
+    // In a room, this broadcasts to everyone seated (potentially several
+    // different logged-in accounts at once) - data.userId identifies whose
+    // balance actually changed, so only that one client applies it.
+    socket.on('coinsUpdate', (data) => {
+      if (currentUser && data.userId === currentUser.id) {
+        currentUser.coins = data.coins;
+        updateAuthUI();
+        if (data.delta > 0) showToast('🪙 +' + data.delta + ' Coins', { className: 'toast-coins' });
+      }
+    });
+
+    // Renders the shared rank-progress screen shown after every ranked hand.
+    // sessionComplete is null for an ordinary hand mid-tournament (title
+    // reads "Hand Complete", Continue deals the next hand); non-null once
+    // the whole session/tournament has actually ended (title reflects a
+    // bust vs. a clean finish, Continue leaves to the home screen instead).
+    let rankResultsContinueMode = 'next';
+    function showRankResultsScreen(xpUpdate, sessionComplete) {
+      const { delta, oldRank, rank, totalXp, tierChanged } = xpUpdate;
+
+      document.getElementById('rank-results-title').textContent = !sessionComplete
+        ? 'Hand Complete'
+        : (sessionComplete.bustedOut ? 'Busted Out' : 'Session Complete');
+      const deltaEl = document.getElementById('rank-results-delta');
+      deltaEl.textContent = (delta >= 0 ? '+' : '') + delta + ' XP';
+      deltaEl.className = delta >= 0 ? 'positive' : 'negative';
+      if (window.RankBadges) {
+        document.getElementById('rank-results-badge').innerHTML = window.RankBadges.render(rank.key, rank.sub, 56);
+      }
+      document.getElementById('rank-results-label').textContent = rank.label;
+      document.getElementById('rank-results-tier-flourish').classList.toggle('hidden', !tierChanged);
+      document.getElementById('rank-results-xp-text').textContent = rank.nextThreshold != null
+        ? totalXp + ' / ' + rank.nextThreshold + ' XP to ' + rank.nextLabel
+        : totalXp + ' XP - top rank reached';
+
+      // A tier change means the "before" and "after" progress fractions
+      // belong to two different tiers (they'd look like a nonsensical jump
+      // animated together) - fill the old tier all the way instead and let
+      // the flourish/new badge communicate the promotion.
+      const fillEl = document.getElementById('rank-results-xp-bar-fill');
+      const fromPct = (oldRank.progress * 100) + '%';
+      const toPct = (tierChanged ? 1 : rank.progress) * 100 + '%';
+      fillEl.style.transition = 'none';
+      fillEl.style.width = fromPct;
+      void fillEl.offsetWidth; // force a reflow so the "before" width is actually registered first
+      fillEl.style.transition = 'width 1.2s ease';
+      requestAnimationFrame(() => { fillEl.style.width = toPct; });
+
+      rankResultsContinueMode = sessionComplete ? 'home' : 'next';
+      document.getElementById('rank-results-modal').classList.remove('hidden');
+    }
+    document.getElementById('btn-rank-results-continue').addEventListener('click', () => {
+      document.getElementById('rank-results-modal').classList.add('hidden');
+      if (rankResultsContinueMode === 'next') socket.emit('nextHand');
+      else leaveToHome();
     });
 
     // ===== Actions =====
@@ -1187,8 +2622,8 @@
     document.addEventListener('keydown', (e) => {
       const tag = document.activeElement && document.activeElement.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-      const homeScreen = document.getElementById('home-screen');
-      if (homeScreen && !homeScreen.classList.contains('hidden')) return;
+      const siteShell = document.getElementById('site-shell');
+      if (siteShell && !siteShell.classList.contains('hidden')) return;
 
       const resultOverlay = document.getElementById('result-overlay');
       const resultVisible = resultOverlay && !resultOverlay.classList.contains('hidden');
@@ -1235,5 +2670,9 @@
     });
   </script>
   <script src="range-trainer.js"></script>
+  <script src="learn.js"></script>
+  <script src="rank-badges.js"></script>
+  <script src="bot-mascots.js"></script>
+  <script src="tension-music.js"></script>
 </body>
 </html>

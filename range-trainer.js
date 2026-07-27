@@ -182,11 +182,39 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = RangeTrainer;
 
   // ===== UI wiring (no-op if this file is loaded outside a page with these elements) =====
-  if (typeof document === 'undefined' || !document.getElementById('trainer-modal')) return;
+  if (typeof document === 'undefined' || !document.getElementById('page-trainer')) return;
 
   let trainerState = null;
   let trainerReps = 0;
   let trainerCorrect = 0;
+  let trainerStreak = 0;
+
+  // Renders the full 13x13 starting-hand grid for whatever scenario/position
+  // the current rep is testing, color-coded by reference action - lets
+  // someone check a single answer against the whole picture instead of just
+  // one hand at a time. Same row/column convention as the Learn tab's own
+  // equity matrix (pairs on the diagonal, suited above it, offsuit below).
+  function renderRangeChart(scenario, position) {
+    const gridEl = document.getElementById('trc-grid');
+    const captionEl = document.getElementById('trc-caption');
+    if (!gridEl) return;
+    captionEl.textContent = scenarioText(scenario, position);
+    const table = RANGE_DATA[scenario][position];
+    let html = '';
+    for (let i = 0; i < RANKS.length; i++) {
+      for (let j = 0; j < RANKS.length; j++) {
+        const rowRank = RANKS[i], colRank = RANKS[j];
+        let key;
+        if (i === j) key = RANK_LETTER[rowRank] + RANK_LETTER[rowRank];
+        else if (i < j) key = RANK_LETTER[rowRank] + RANK_LETTER[colRank] + 's';
+        else key = RANK_LETTER[colRank] + RANK_LETTER[rowRank] + 'o';
+        const entry = table[key];
+        const action = entry ? entry.action : 'fold';
+        html += '<div class="trc-cell trc-cell-' + action + '" title="' + key + '">' + key + '</div>';
+      }
+    }
+    gridEl.innerHTML = html;
+  }
 
   function newTrainerRep() {
     const position = pickRandom(POSITIONS);
@@ -205,6 +233,7 @@
     document.getElementById('trainer-actions').classList.remove('hidden');
     // RFI has no bet to call - hide the Call button rather than offering a nonsensical option
     document.getElementById('btn-trainer-call').style.display = scenario === 'RFI' ? 'none' : '';
+    renderRangeChart(scenario, position);
   }
 
   function gradeTrainerAction(userAction) {
@@ -212,11 +241,12 @@
     const { entry, handKey } = trainerState;
     const correct = userAction === entry.action || userAction === entry.altAction;
     trainerReps++;
-    if (correct) trainerCorrect++;
+    if (correct) { trainerCorrect++; trainerStreak++; } else { trainerStreak = 0; }
 
     document.getElementById('tr-reps').textContent = trainerReps;
     document.getElementById('tr-correct').textContent = trainerCorrect;
     document.getElementById('tr-accuracy').textContent = Math.round((trainerCorrect / trainerReps) * 100) + '%';
+    document.getElementById('tr-streak').textContent = trainerStreak;
 
     const fb = document.getElementById('trainer-feedback');
     fb.classList.remove('hidden');
@@ -236,11 +266,14 @@
   document.getElementById('btn-trainer-raise').addEventListener('click', () => gradeTrainerAction('raise'));
   document.getElementById('btn-trainer-next').addEventListener('click', () => newTrainerRep());
 
-  document.getElementById('btn-open-trainer').addEventListener('click', () => {
-    document.getElementById('trainer-modal').classList.remove('hidden');
-    newTrainerRep();
+  document.getElementById('btn-toggle-range-chart').addEventListener('click', () => {
+    const panel = document.getElementById('trainer-range-chart-panel');
+    const nowHidden = panel.classList.toggle('hidden');
+    document.getElementById('btn-toggle-range-chart').textContent = nowHidden ? 'View Range Chart' : 'Hide Range Chart';
   });
-  document.getElementById('btn-close-trainer').addEventListener('click', () => {
-    document.getElementById('trainer-modal').classList.add('hidden');
-  });
+
+  // The trainer page is always mounted now (a site tab, not an open/close
+  // modal) - deal the first rep immediately so the tab shows a live hand
+  // as soon as the page loads, not a blank state waiting for a click.
+  newTrainerRep();
 })();

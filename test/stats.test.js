@@ -29,12 +29,16 @@ test("VPIP counts a voluntary preflop call from the small blind", () => {
   cancelPendingBotTimer(game);
 
   game.hand.applyAction(bot, "check"); // BB option closes preflop
-  // Flop/turn/river: "You" (SB) acts first each street per this engine's rules
+  // Flop/turn/river: heads-up, the big blind (bot) acts first every street
+  // after preflop - "You" (SB/button) acts last.
   for (let street = 0; street < 3 && !game.hand.complete; street++) {
-    assert.equal(game.hand.actingPlayerId(), "You");
-    assert.ok(game.applyPlayerAction("You", "check"));
-    cancelPendingBotTimer(game);
-    if (!game.hand.complete) game.hand.applyAction(bot, "check");
+    assert.equal(game.hand.actingPlayerId(), bot);
+    game.hand.applyAction(bot, "check");
+    if (!game.hand.complete) {
+      assert.equal(game.hand.actingPlayerId(), "You");
+      assert.ok(game.applyPlayerAction("You", "check"));
+      cancelPendingBotTimer(game);
+    }
   }
   if (game.hand.complete && game.stats.handsPlayed === 0) game.handleHandComplete();
 
@@ -57,14 +61,13 @@ test("VPIP does not count checking the big blind option", () => {
   assert.ok(game.applyPlayerAction("You", "check")); // BB option - not voluntary
   cancelPendingBotTimer(game);
 
+  // Heads-up, "You" (BB) acts first every street after preflop - bot
+  // (SB/button) acts last.
   for (let street = 0; street < 3 && !game.hand.complete; street++) {
-    assert.equal(game.hand.actingPlayerId(), bot);
-    game.hand.applyAction(bot, "check");
-    if (!game.hand.complete) {
-      assert.equal(game.hand.actingPlayerId(), "You");
-      assert.ok(game.applyPlayerAction("You", "check"));
-      cancelPendingBotTimer(game);
-    }
+    assert.equal(game.hand.actingPlayerId(), "You");
+    assert.ok(game.applyPlayerAction("You", "check"));
+    cancelPendingBotTimer(game);
+    if (!game.hand.complete) game.hand.applyAction(bot, "check");
   }
   if (game.hand.complete && game.stats.handsPlayed === 0) game.handleHandComplete();
 
@@ -132,10 +135,13 @@ test("showdown tracking: showdownsSeen increments when both players see the rive
   cancelPendingBotTimer(game);
   game.hand.applyAction(bot, "check");
 
+  // Heads-up, the big blind (bot) acts first on every street after preflop.
   for (let street = 0; street < 3 && !game.hand.complete; street++) {
-    assert.ok(game.applyPlayerAction("You", "check"));
-    cancelPendingBotTimer(game);
-    if (!game.hand.complete) game.hand.applyAction(bot, "check");
+    game.hand.applyAction(bot, "check");
+    if (!game.hand.complete) {
+      assert.ok(game.applyPlayerAction("You", "check"));
+      cancelPendingBotTimer(game);
+    }
   }
   const result = game.hand.result;
   const youPayout = result.payouts.get("You") || 0;

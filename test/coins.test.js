@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward, DAILY_REWARD_TABLE, HAND_COINS_REWARD } from "../src/coins.js";
+import { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward, computeHandCoinsDelta, DAILY_REWARD_TABLE, HAND_COINS_REWARD, WIN_STREAK_BONUS_THRESHOLD } from "../src/coins.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -130,19 +130,96 @@ test("hasUnclaimedDailyReward returns false rather than throwing for an unknown 
   assert.equal(hasUnclaimedDailyReward(db, 99999), false);
 });
 
-test("applyHandCoinsReward adds the flat per-hand amount and accumulates across hands", () => {
+test("applyHandCoinsReward applies the given delta and accumulates across hands", () => {
   const db = openDb(":memory:");
   const userId = seedUser(db, "Wes");
 
-  const first = applyHandCoinsReward(db, userId);
+  const first = applyHandCoinsReward(db, userId, HAND_COINS_REWARD);
   assert.equal(first.delta, HAND_COINS_REWARD);
   assert.equal(first.coins, HAND_COINS_REWARD);
 
-  const second = applyHandCoinsReward(db, userId);
+  const second = applyHandCoinsReward(db, userId, HAND_COINS_REWARD);
   assert.equal(second.coins, HAND_COINS_REWARD * 2);
 });
 
 test("applyHandCoinsReward returns null for a user id that doesn't exist", () => {
   const db = openDb(":memory:");
-  assert.equal(applyHandCoinsReward(db, 99999), null);
+  assert.equal(applyHandCoinsReward(db, 99999, HAND_COINS_REWARD), null);
+});
+
+test("applyHandCoinsReward floors at 0 rather than going negative, and returns the actual (smaller) delta applied", () => {
+  const db = openDb(":memory:");
+  const userId = seedUser(db, "Nadia");
+  applyHandCoinsReward(db, userId, 1); // starts at 1 coin
+
+  const result = applyHandCoinsReward(db, userId, -5);
+  assert.equal(result.coins, 0, "should floor at 0, not go negative");
+  assert.equal(result.delta, -1, "actual delta should reflect the real change (1 -> 0), not the requested -5");
+});
+
+test("applyHandCoinsReward applies a negative delta normally when there's enough balance to absorb it", () => {
+  const db = openDb(":memory:");
+  const userId = seedUser(db, "Omar");
+  applyHandCoinsReward(db, userId, 10);
+
+  const result = applyHandCoinsReward(db, userId, -1);
+  assert.equal(result.coins, 9);
+  assert.equal(result.delta, -1);
+});
+
+// ===== computeHandCoinsDelta: unranked/experimental win-size + streak tiers =====
+
+test("computeHandCoinsDelta charges a flat -1 for any hand you didn't come out ahead on, regardless of how much you lost", () => {
+  assert.deepEqual(computeHandCoinsDelta({ netThisHand: -500, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 });
+  assert.deepEqual(computeHandCoinsDelta({ netThisHand: -1, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 });
+  assert.deepEqual(computeHandCoinsDelta({ netThisHand: 0, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 }, "breaking exactly even is not a win");
+});
+
+test("computeHandCoinsDelta pays +1 for a small win, below the big-win threshold", () => {
+  const result = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000 }); // 10% of stack
+  assert.equal(result.delta, 1);
+  assert.equal(result.tier, "win");
+});
+
+test("computeHandCoinsDelta pays +2 for a big win (20%+ of the starting stack)", () => {
+  const result = computeHandCoinsDelta({ netThisHand: 250, startingStack: 1000 }); // 25%
+  assert.equal(result.delta, 2);
+  assert.equal(result.tier, "bigWin");
+});
+
+test("computeHandCoinsDelta pays +3 for a massive win (50%+ of the starting stack)", () => {
+  const result = computeHandCoinsDelta({ netThisHand: 600, startingStack: 1000 }); // 60%
+  assert.equal(result.delta, 3);
+  assert.equal(result.tier, "massiveWin");
+});
+
+test("computeHandCoinsDelta tier boundaries are inclusive at exactly 20% and 50%", () => {
+  assert.equal(computeHandCoinsDelta({ netThisHand: 200, startingStack: 1000 }).tier, "bigWin");
+  assert.equal(computeHandCoinsDelta({ netThisHand: 500, startingStack: 1000 }).tier, "massiveWin");
+});
+
+test(`computeHandCoinsDelta adds a streak bonus equal to the streak once it reaches ${WIN_STREAK_BONUS_THRESHOLD}, on top of the win-tier amount`, () => {
+  const noBonusYet = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: WIN_STREAK_BONUS_THRESHOLD - 1 });
+  assert.equal(noBonusYet.streakBonus, 0);
+  assert.equal(noBonusYet.delta, 1);
+
+  const withBonus = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: WIN_STREAK_BONUS_THRESHOLD });
+  assert.equal(withBonus.streakBonus, WIN_STREAK_BONUS_THRESHOLD);
+  assert.equal(withBonus.delta, 1 + WIN_STREAK_BONUS_THRESHOLD);
+
+  const longerStreak = computeHandCoinsDelta({ netThisHand: 600, startingStack: 1000, winStreak: 5 });
+  assert.equal(longerStreak.streakBonus, 5);
+  assert.equal(longerStreak.delta, 3 + 5, "massive-win tier amount plus the streak bonus");
+});
+
+test("computeHandCoinsDelta never applies a streak bonus on a loss, even if winStreak is stale/nonzero", () => {
+  const result = computeHandCoinsDelta({ netThisHand: -50, startingStack: 1000, winStreak: 5 });
+  assert.equal(result.delta, -1);
+  assert.equal(result.streakBonus, 0);
+});
+
+test("computeHandCoinsDelta treats a negative winStreak (a losing streak) as no bonus", () => {
+  const result = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: -4 });
+  assert.equal(result.streakBonus, 0);
+  assert.equal(result.delta, 1);
 });

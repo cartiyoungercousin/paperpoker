@@ -4,6 +4,7 @@ import { TableGame } from "../server.js";
 import { xpForHand } from "../src/rankTiers.js";
 import { RANKED_FIXED_SETTINGS } from "../src/rankedConfig.js";
 import { HEADS_UP_ONLY_DIFFICULTIES, BOARDROOM_CHARACTERS } from "../src/tableGame.js";
+import { computeHandCoinsDelta, HAND_COINS_REWARD } from "../src/coins.js";
 
 function cancelPendingBotTimer(game) {
   if (game.botTimeout) {
@@ -32,6 +33,24 @@ function playHeadsUpCheckdown(game) {
       if (game.hand.complete) game.handleHandComplete();
     }
   }
+}
+
+// Forces a deterministic win of a known-ish size for "You": the bot (SB)
+// just calls preflop, "You" (BB) raises to raiseAmount, and the bot is
+// forced to fold - bypassing the bot's own (probabilistic) decision logic
+// entirely, unlike playHeadsUpCheckdown's random check-down. Callers should
+// still read the actual payout/contributed from game.hand.result rather
+// than assuming raiseAmount exactly, since blinds/calls add a little on top.
+function playForcedRaiseAndFold(game, raiseAmount) {
+  game.dealerIndex = 1; // bot is SB/dealer, acts first preflop
+  game.startNewHand();
+  cancelPendingBotTimer(game);
+  const botId = game.players.find((p) => p.type === "bot").id;
+  game.hand.applyAction(botId, "call"); // bot completes SB to match BB
+  game.applyPlayerAction("You", "raise", raiseAmount); // "You" (BB) raises
+  cancelPendingBotTimer(game);
+  game.hand.applyAction(botId, "fold");
+  if (game.hand.complete) game.handleHandComplete();
 }
 
 test("a ranked hand emits 'xpEarned' with the correct win/loss delta for the difficulty", () => {
@@ -139,6 +158,68 @@ test("setHumanUserId(null) (e.g. logging out mid-session) stops further coinsEar
   game.on("coinsEarned", () => { coinsEventFired = true; });
   playHeadsUpCheckdown(game);
   assert.equal(coinsEventFired, false);
+});
+
+// ===== Unranked coins: win-size tiers + win-streak bonus (wired through
+// computeHandCoinsDelta, see test/coins.test.js for the pure-function cases) =====
+
+test("an unranked win's coinsEarned delta/tier matches computeHandCoinsDelta for the actual result", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.setHumanUserId(55);
+
+  let coinsEvent = null;
+  game.on("coinsEarned", (payload) => { coinsEvent = payload; });
+
+  playForcedRaiseAndFold(game, 300);
+
+  const payout = game.hand.result.payouts.get("You") || 0;
+  const contributed = game.hand.totalContributed.get("You") || 0;
+  const expected = computeHandCoinsDelta({
+    netThisHand: payout - contributed,
+    startingStack: game.startingStack,
+    winStreak: game.stats.currentStreak,
+  });
+
+  assert.equal(coinsEvent.delta, expected.delta);
+  assert.equal(coinsEvent.tier, expected.tier);
+  assert.equal(coinsEvent.streakBonus, expected.streakBonus);
+  assert.ok(["win", "bigWin", "massiveWin"].includes(coinsEvent.tier), "forcing a fold should always win, never a loss tier");
+});
+
+test("a ranked hand's coinsEarned stays on the flat HAND_COINS_REWARD regardless of win size, unlike unranked's tiered system", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.setHumanUserId(66);
+  game.setRankedMode(true, 66);
+
+  let coinsEvent = null;
+  game.on("coinsEarned", (payload) => { coinsEvent = payload; });
+
+  playForcedRaiseAndFold(game, 300); // a big enough win to be bigWin/massiveWin if this were unranked
+
+  assert.equal(coinsEvent.delta, HAND_COINS_REWARD);
+  assert.equal(coinsEvent.tier, null);
+  assert.equal(coinsEvent.streakBonus, 0);
+});
+
+test("three unranked wins in a row triggers the win-streak coin bonus starting on the third win", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 5000, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.setHumanUserId(77);
+
+  const coinsEvents = [];
+  game.on("coinsEarned", (payload) => coinsEvents.push(payload));
+
+  playForcedRaiseAndFold(game, 50);
+  playForcedRaiseAndFold(game, 50);
+  playForcedRaiseAndFold(game, 50);
+
+  assert.equal(coinsEvents.length, 3);
+  assert.equal(coinsEvents[0].streakBonus, 0);
+  assert.equal(coinsEvents[1].streakBonus, 0);
+  assert.equal(coinsEvents[2].streakBonus, 3, "3rd consecutive win should trigger the streak bonus, worth the streak count");
+  assert.equal(coinsEvents[2].delta, coinsEvents[2].streakBonus + 1, "small win tier (+1) plus the streak bonus");
 });
 
 test("updateSettings resets ranked mode back to false (a new game always starts unranked)", () => {

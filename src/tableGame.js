@@ -13,6 +13,7 @@ import { computeAllInEquity } from "./equity.js";
 import { rankName } from "./deck.js";
 import { xpForHand } from "./rankTiers.js";
 import { pickLine } from "./botDialogue.js";
+import { computeHandCoinsDelta, HAND_COINS_REWARD } from "./coins.js";
 
 const BOT_NAMES = [
   "James", "Victoria", "Marcus", "Isabella",
@@ -795,17 +796,35 @@ class TableGame extends EventEmitter {
     // (unranked, ranked, experimental) - just for playing a hand, not tied
     // to ranked status. humanUserId is independent of the ranked-only userId
     // above for exactly this reason.
+    //
+    // Ranked keeps the old flat per-hand reward (it already has its own
+    // XP-based progression - coins there are just a bonus, not a result-
+    // based system). Unranked/experimental instead scales with how big the
+    // win actually was, costs a coin for a hand you didn't come out ahead
+    // on, and adds an escalating bonus on top of a 3+ win streak - see
+    // computeHandCoinsDelta's own comment for the exact tiers.
     if (this.humanUserId && youDealtIn) {
-      this.emit('coinsEarned', { userId: this.humanUserId });
+      if (this.ranked) {
+        this.emit('coinsEarned', { userId: this.humanUserId, delta: HAND_COINS_REWARD, tier: null, streakBonus: 0 });
+      } else {
+        const { delta, tier, streakBonus } = computeHandCoinsDelta({
+          netThisHand: youNetThisHand,
+          startingStack: this.startingStack,
+          winStreak: this.stats.currentStreak,
+        });
+        this.emit('coinsEarned', { userId: this.humanUserId, delta, tier, streakBonus });
+      }
     }
     // Room mode's equivalent - potentially several logged-in accounts at
     // once, so every seat with a known userId that was actually dealt into
     // this hand gets its own coinsEarned event (playerUserIds is always
     // empty in solo mode, so this is a no-op there - never double-pays the
-    // humanUserId case above).
+    // humanUserId case above). Kept on the flat reward for now - the
+    // win-streak/win-size tiers above are computed from solo's own "You"-
+    // scoped stats, which don't have a per-seat equivalent for room players.
     for (const [playerId, userId] of this.playerUserIds) {
       if (this.hand.order.includes(playerId)) {
-        this.emit('coinsEarned', { userId });
+        this.emit('coinsEarned', { userId, delta: HAND_COINS_REWARD, tier: null, streakBonus: 0 });
       }
     }
 

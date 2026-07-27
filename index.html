@@ -1461,11 +1461,6 @@
     });
 
     // ===== Customize (cosmetics shop - card backs, table felt) =====
-    const CUSTOMIZE_SWATCH_LABEL = {
-      cardBack: { classic: 'Classic Blue', diamond: 'Diamond Weave', jewel: 'Ruby Jewel', suits: 'Suit Marks' },
-      feltColor: { green: 'Classic Green', blue: 'Royal Blue', crimson: 'Crimson', purple: 'Royal Purple' },
-    };
-
     function customizeSwatchHTML(category, key) {
       // Renders using the exact same CSS the real table/cards use (see
       // #app[data-cardback=...]/#app[data-felt=...] in styles.css) by
@@ -1479,7 +1474,7 @@
 
     function renderCustomizeGrid(gridEl, category, items) {
       gridEl.innerHTML = items.map((item) => {
-        const label = CUSTOMIZE_SWATCH_LABEL[category][item.key] || item.name;
+        const label = item.name;
         let action;
         if (item.equipped) {
           action = '<span class="customize-equipped-label">Equipped</span>';
@@ -2548,7 +2543,17 @@
       if (currentUser && data.userId === currentUser.id) {
         currentUser.coins = data.coins;
         updateAuthUI();
-        if (data.delta > 0) showToast('🪙 +' + data.delta + ' Coins', { className: 'toast-coins' });
+        // data.delta can come back 0 (e.g. a loss charge against an
+        // already-empty balance, floored - see applyHandCoinsReward) - no
+        // real change happened, so nothing to announce.
+        if (data.delta !== 0) {
+          const sign = data.delta > 0 ? '+' : '';
+          const parts = ['🪙 ' + sign + data.delta + (Math.abs(data.delta) === 1 ? ' Coin' : ' Coins')];
+          if (data.tier === 'bigWin') parts.push('Big Win!');
+          else if (data.tier === 'massiveWin') parts.push('Massive Win!');
+          if (data.streakBonus > 0) parts.push('🔥 ' + data.streakBonus + '-Win Streak!');
+          showToast(parts.join(' - '), { className: data.delta > 0 ? 'toast-coins' : 'toast-coins-loss' });
+        }
       }
     });
 

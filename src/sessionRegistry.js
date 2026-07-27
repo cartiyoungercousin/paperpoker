@@ -122,22 +122,27 @@ class SessionRegistry {
     tableGame.on('xpEarned', ({ userId, delta }) => this._handleXpEarned(id, userId, delta));
     tableGame.on('rankedHandComplete', (delta) => this._handleRankedHandComplete(delta));
     tableGame.on('rankedSessionComplete', (payload) => io.to(id).emit('rankedSessionComplete', payload));
-    tableGame.on('coinsEarned', ({ userId }) => this._handleCoinsEarned(id, userId));
+    tableGame.on('coinsEarned', ({ userId, delta, tier, streakBonus }) => this._handleCoinsEarned(id, userId, delta, tier, streakBonus));
   }
 
   // Same shape and same reasoning as _handleXpEarned above (wrapped so a
-  // database problem can never propagate back into TableGame) - persists the
-  // flat per-hand coins reward and broadcasts the new balance so the nav
-  // count updates live. broadcastTarget is a whole room's group in room
-  // mode (potentially several different logged-in accounts listening at
-  // once) - userId rides along in the payload so each client can tell
-  // whether this update is actually about them.
-  _handleCoinsEarned(broadcastTarget, userId) {
+  // database problem can never propagate back into TableGame) - persists
+  // the per-hand coins delta TableGame already computed (see
+  // computeHandCoinsDelta) and broadcasts the new balance so the nav count
+  // (and the coin toast) updates live. broadcastTarget is a whole room's
+  // group in room mode (potentially several different logged-in accounts
+  // listening at once) - userId rides along in the payload so each client
+  // can tell whether this update is actually about them. tier/streakBonus
+  // ride along too so the toast can label a Big/Massive win or a streak
+  // bonus - actualDelta (from applyHandCoinsReward's floor-at-0 handling)
+  // is what's broadcast, not the requested one, so the toast never claims a
+  // bigger change than what really happened to the balance.
+  _handleCoinsEarned(broadcastTarget, userId, delta, tier, streakBonus) {
     if (!this.db) return;
     try {
-      const result = applyHandCoinsReward(this.db, userId);
+      const result = applyHandCoinsReward(this.db, userId, delta);
       if (!result) return;
-      this.io.to(broadcastTarget).emit('coinsUpdate', { userId, delta: result.delta, coins: result.coins });
+      this.io.to(broadcastTarget).emit('coinsUpdate', { userId, delta: result.delta, coins: result.coins, tier, streakBonus });
     } catch (err) {
       console.error("Failed to persist/broadcast coins for user", userId, ":", err);
     }
@@ -299,7 +304,7 @@ class SessionRegistry {
     // (see TableGame.playerUserIds), broadcast to the whole room same as
     // solo's _handleCoinsEarned; each connected client only updates its own
     // currentUser's balance display when the userId matches them.
-    tableGame.on('coinsEarned', ({ userId }) => this._handleCoinsEarned(broadcastGroup, userId));
+    tableGame.on('coinsEarned', ({ userId, delta, tier, streakBonus }) => this._handleCoinsEarned(broadcastGroup, userId, delta, tier, streakBonus));
   }
 
   _attachSocketToRoom(roomEntry, socket, sessionId) {

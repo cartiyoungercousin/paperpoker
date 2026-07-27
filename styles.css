@@ -1570,6 +1570,18 @@ body::before {
 .customize-swatch[data-felt="purple"] .customize-swatch-felt {
   background: radial-gradient(ellipse at 30% 40%, #6a248a 0%, #4c1868 30%, #3c1054 55%, #2c0a40 100%)
 }
+.customize-swatch[data-felt="teal"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #1f7a7a 0%, #155d5d 30%, #0f4d4d 55%, #0a3d3d 100%)
+}
+.customize-swatch[data-felt="black"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #2a2a2a 0%, #1a1a1a 30%, #101010 55%, #050505 100%)
+}
+.customize-swatch[data-felt="rose"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b8547a 0%, #8a3d5c 30%, #6b2d47 55%, #4d1f33 100%)
+}
+.customize-swatch[data-felt="gold"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b89550 0%, #96773d 30%, #7a5f2f 55%, #5c481f 100%)
+}
 
 .customize-swatch[data-cardback="diamond"] .customize-swatch-card {
   background: #12321f;
@@ -1588,6 +1600,24 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ctext x='1' y='11' font-size='9' fill='%23555'%3E%E2%99%A0%3C/text%3E%3Ctext x='12' y='22' font-size='9' fill='%23555'%3E%E2%99%A5%3C/text%3E%3C/svg%3E");
   background-size: 24px 24px;
   border: 2px solid #171717
+}
+.customize-swatch[data-cardback="emerald"] .customize-swatch-card {
+  background: radial-gradient(ellipse at 35% 30%, #1fa363 0%, #0d6b3f 55%, #04331f 100%);
+  border: 2px solid #02190f
+}
+.customize-swatch[data-cardback="midnight"] .customize-swatch-card {
+  background: radial-gradient(ellipse at 35% 30%, #2c3e6b 0%, #16203d 55%, #080b18 100%);
+  border: 2px solid #04060c
+}
+.customize-swatch[data-cardback="royal"] .customize-swatch-card {
+  background: #1a1a1a;
+  background-image: linear-gradient(45deg, #1a1a1a 25%, #3a3220 25%, #3a3220 50%, #1a1a1a 50%, #1a1a1a 75%, #3a3220 75%);
+  background-size: 10px 10px;
+  border: 2px solid #0d0d0d
+}
+.customize-swatch[data-cardback="prism"] .customize-swatch-card {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ffd166 25%, #06d6a0 50%, #4d96ff 75%, #b28dff 100%);
+  border: 2px solid #1a1a1a
 }
 
 .customize-item-name {
@@ -2639,6 +2669,11 @@ body::before {
 .toast-coins {
   border-color: rgba(201, 168, 76, 0.4);
   color: #c9a84c
+}
+
+.toast-coins-loss {
+  border-color: rgba(239, 83, 80, 0.35);
+  color: rgba(239, 83, 80, 0.85)
 }
 
 /* ===== Celebration / Heartbreak ===== */
@@ -3918,6 +3953,18 @@ body::before {
 #app[data-felt="purple"] #table-felt {
   background: radial-gradient(ellipse at 30% 40%, #6a248a 0%, #4c1868 30%, #3c1054 55%, #2c0a40 100%)
 }
+#app[data-felt="teal"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #1f7a7a 0%, #155d5d 30%, #0f4d4d 55%, #0a3d3d 100%)
+}
+#app[data-felt="black"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #2a2a2a 0%, #1a1a1a 30%, #101010 55%, #050505 100%)
+}
+#app[data-felt="rose"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b8547a 0%, #8a3d5c 30%, #6b2d47 55%, #4d1f33 100%)
+}
+#app[data-felt="gold"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b89550 0%, #96773d 30%, #7a5f2f 55%, #5c481f 100%)
+}
 
 /* ===== Cosmetics: equipped card back. "classic" (the default diagonal
    stripe on .card-b/.csb above) needs no override rule. ===== */
@@ -3954,6 +4001,36 @@ body::before {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Ctext x='0' y='6' font-size='5' fill='%23555'%3E%E2%99%A0%3C/text%3E%3Ctext x='6' y='11' font-size='5' fill='%23555'%3E%E2%99%A5%3C/text%3E%3C/svg%3E");
   background-size: 12px 12px;
   border-color: #171717
+}
+#app[data-cardback="emerald"] .card-b,
+#app[data-cardback="emerald"] .csb {
+  background: radial-gradient(ellipse at 35% 30%, #1fa363 0%, #0d6b3f 55%, #04331f 100%);
+  background-image: none;
+  border-color: #02190f
+}
+#app[data-cardback="midnight"] .card-b,
+#app[data-cardback="midnight"] .csb {
+  background: radial-gradient(ellipse at 35% 30%, #2c3e6b 0%, #16203d 55%, #080b18 100%);
+  background-image: none;
+  border-color: #04060c
+}
+#app[data-cardback="royal"] .card-b {
+  background: #1a1a1a;
+  background-image: linear-gradient(45deg, #1a1a1a 25%, #3a3220 25%, #3a3220 50%, #1a1a1a 50%, #1a1a1a 75%, #3a3220 75%);
+  background-size: 10px 10px;
+  border-color: #0d0d0d
+}
+#app[data-cardback="royal"] .csb {
+  background: #1a1a1a;
+  background-image: linear-gradient(45deg, #1a1a1a 25%, #3a3220 25%, #3a3220 50%, #1a1a1a 50%, #1a1a1a 75%, #3a3220 75%);
+  background-size: 6px 6px;
+  border-color: #0d0d0d
+}
+#app[data-cardback="prism"] .card-b,
+#app[data-cardback="prism"] .csb {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ffd166 25%, #06d6a0 50%, #4d96ff 75%, #b28dff 100%);
+  background-image: none;
+  border-color: #1a1a1a
 }
 
 /* A faint, slowly breathing ambient glow behind the felt - present on every

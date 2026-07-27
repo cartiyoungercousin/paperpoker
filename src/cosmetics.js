@@ -4,18 +4,30 @@
 // must be unlocked before it can be equipped. Establishes the reusable
 // spend-validation pattern Rumble mode's eventual entry cost will reuse.
 
+// Costs climb faster than the original catalog - coins now come from a
+// tiered win-size/streak system (src/coins.js) rather than a flat per-hand
+// amount, so unlocks need real room to be aspirational rather than trivial
+// after a session or two.
 const COSMETICS_CATALOG = {
   cardBack: [
     { key: "classic", name: "Classic Blue", cost: 0 },
-    { key: "diamond", name: "Diamond Weave", cost: 100 },
-    { key: "jewel", name: "Ruby Jewel", cost: 150 },
-    { key: "suits", name: "Suit Marks", cost: 200 },
+    { key: "diamond", name: "Diamond Weave", cost: 200 },
+    { key: "jewel", name: "Ruby Jewel", cost: 300 },
+    { key: "emerald", name: "Emerald Gem", cost: 350 },
+    { key: "suits", name: "Suit Marks", cost: 400 },
+    { key: "midnight", name: "Midnight Sapphire", cost: 500 },
+    { key: "royal", name: "Royal Gold", cost: 600 },
+    { key: "prism", name: "Prism Shift", cost: 750 },
   ],
   feltColor: [
     { key: "green", name: "Classic Green", cost: 0 },
-    { key: "blue", name: "Royal Blue", cost: 100 },
-    { key: "crimson", name: "Crimson", cost: 150 },
-    { key: "purple", name: "Royal Purple", cost: 200 },
+    { key: "blue", name: "Royal Blue", cost: 200 },
+    { key: "crimson", name: "Crimson", cost: 300 },
+    { key: "teal", name: "Deep Teal", cost: 350 },
+    { key: "purple", name: "Royal Purple", cost: 400 },
+    { key: "black", name: "Obsidian Black", cost: 450 },
+    { key: "rose", name: "Rose Quartz", cost: 500 },
+    { key: "gold", name: "Champagne Gold", cost: 650 },
   ],
 };
 

@@ -19,9 +19,46 @@ function utcDayNumber(ms) {
 // paying out at the day-7 rate every seventh day indefinitely.
 const DAILY_REWARD_TABLE = [10, 15, 20, 25, 30, 35, 50];
 
-// Flat reward for simply being dealt into a hand while logged in, any game
-// mode - rewards playing in general, not just ranked or any one mode.
+// Flat reward for simply being dealt into a hand while logged in - kept as
+// the reward for Ranked (which already has its own XP-based progression;
+// coins there are a simple bonus, not tied to result) and for room-mode
+// seats other than the local human (per-seat win-streak tracking doesn't
+// exist for arbitrary room players yet). Unranked/experimental solo play
+// uses computeHandCoinsDelta below instead - see its own comment.
 const HAND_COINS_REWARD = 2;
+
+// A win/loss streak of at least this many hands in a row starts earning a
+// bonus equal to the streak length itself (3 in a row = +3 bonus, 4 in a row
+// = +4, and so on) - an escalating incentive to keep a hot streak going,
+// on top of (not instead of) the normal win-tier amount below.
+const WIN_STREAK_BONUS_THRESHOLD = 3;
+
+// Unranked/experimental coin reward, scaled by how big the win actually was
+// relative to the starting stack, rather than a flat amount regardless of
+// pot size - a min-raise nit-win and an all-in double-up shouldn't pay the
+// same. A hand you didn't come out ahead on (fold, lose at showdown, or
+// break exactly even) costs a flat 1 coin regardless of how much you lost -
+// losing bigger doesn't cost extra, winning bigger earns more.
+const WIN_TIER_THRESHOLDS = [
+  { minRatio: 0.5, delta: 3, tier: "massiveWin" },
+  { minRatio: 0.2, delta: 2, tier: "bigWin" },
+  { minRatio: 0, delta: 1, tier: "win" },
+];
+
+// netThisHand: this player's own payout minus their own contribution for the
+// hand (positive = won money, zero or negative = didn't). winStreak: the
+// running win-streak count AFTER this hand (see TableGame.stats.
+// currentStreak) - only its sign/magnitude matters, a loss streak (negative)
+// never grants a bonus.
+function computeHandCoinsDelta({ netThisHand, startingStack, winStreak = 0 }) {
+  if (netThisHand <= 0) {
+    return { delta: -1, tier: "loss", streakBonus: 0 };
+  }
+  const ratio = startingStack > 0 ? netThisHand / startingStack : 0;
+  const { delta: tierDelta, tier } = WIN_TIER_THRESHOLDS.find((t) => ratio >= t.minRatio);
+  const streakBonus = winStreak >= WIN_STREAK_BONUS_THRESHOLD ? winStreak : 0;
+  return { delta: tierDelta + streakBonus, tier, streakBonus };
+}
 
 // Claims today's daily-login reward for userId, if it hasn't been claimed
 // yet today. Returns null only if userId doesn't resolve to a real user;
@@ -64,13 +101,24 @@ function hasUnclaimedDailyReward(db, userId) {
   return utcDayNumber(row.last_daily_reward_at) !== utcDayNumber(Date.now());
 }
 
-// The small per-hand reward - mirrors applyXpDelta's shape (src/auth.js).
-function applyHandCoinsReward(db, userId) {
+// Applies a per-hand coins delta (positive or negative - see
+// computeHandCoinsDelta) and floors at 0, same flooring discipline as
+// applyXpDelta (src/auth.js) - a coin balance can never go negative. Returns
+// the ACTUAL delta applied (which can differ from the requested one right
+// at the floor, e.g. a -1 charge against a 0 balance actually changes
+// nothing), not the theoretical one, so the client shows what really
+// happened rather than a delta that would have gone negative.
+function applyHandCoinsReward(db, userId, delta) {
   const row = db.prepare("SELECT coins FROM users WHERE id = ?").get(userId);
   if (!row) return null;
-  const newCoins = row.coins + HAND_COINS_REWARD;
+  const newCoins = Math.max(0, row.coins + delta);
+  const actualDelta = newCoins - row.coins;
   db.prepare("UPDATE users SET coins = ? WHERE id = ?").run(newCoins, userId);
-  return { coins: newCoins, delta: HAND_COINS_REWARD };
+  return { coins: newCoins, delta: actualDelta };
 }
 
-export { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward, DAILY_REWARD_TABLE, HAND_COINS_REWARD };
+export {
+  claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward,
+  computeHandCoinsDelta,
+  DAILY_REWARD_TABLE, HAND_COINS_REWARD, WIN_STREAK_BONUS_THRESHOLD,
+};

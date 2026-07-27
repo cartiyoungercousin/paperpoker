@@ -30,7 +30,8 @@ test("catalog defaults (classic card back, green felt) are always owned and equi
 
 test("unlockCosmetic deducts the exact cost and records ownership", () => {
   const db = openDb(":memory:");
-  const userId = seedUser(db, 150);
+  const diamondCost = COSMETICS_CATALOG.cardBack.find((c) => c.key === "diamond").cost;
+  const userId = seedUser(db, diamondCost + 50);
 
   const result = unlockCosmetic(db, userId, "cardBack", "diamond");
   assert.equal(result.ok, true);
@@ -57,6 +58,7 @@ test("unlockCosmetic refuses when the user doesn't have enough coins, and doesn'
 
 test("unlockCosmetic refuses a second unlock of something already owned", () => {
   const db = openDb(":memory:");
+  const diamondCost = COSMETICS_CATALOG.cardBack.find((c) => c.key === "diamond").cost;
   const userId = seedUser(db, 1000);
 
   assert.equal(unlockCosmetic(db, userId, "cardBack", "diamond").ok, true);
@@ -65,7 +67,7 @@ test("unlockCosmetic refuses a second unlock of something already owned", () => 
   assert.match(second.error, /already unlocked/i);
 
   const row = db.prepare("SELECT coins FROM users WHERE id = ?").get(userId);
-  assert.equal(row.coins, 900, "should not have been double-charged");
+  assert.equal(row.coins, 1000 - diamondCost, "should not have been double-charged");
 });
 
 test("unlockCosmetic refuses an unknown category/key", () => {
@@ -128,5 +130,32 @@ test("every catalog category has exactly one free (cost 0) default entry", () =>
   for (const category of Object.keys(COSMETICS_CATALOG)) {
     const frees = COSMETICS_CATALOG[category].filter((c) => c.cost === 0);
     assert.equal(frees.length, 1, `${category} should have exactly one free default`);
+  }
+});
+
+test("both catalog categories offer a real selection - at least 6 non-free options each", () => {
+  for (const category of Object.keys(COSMETICS_CATALOG)) {
+    const paidOptions = COSMETICS_CATALOG[category].filter((c) => c.cost > 0);
+    assert.ok(paidOptions.length >= 6, `${category} should have a substantial catalog, not just a couple of options`);
+  }
+});
+
+test("every non-free item has a distinct cost, and costs climb rather than repeating/decreasing within a category", () => {
+  for (const category of Object.keys(COSMETICS_CATALOG)) {
+    const costs = COSMETICS_CATALOG[category].filter((c) => c.cost > 0).map((c) => c.cost);
+    assert.equal(new Set(costs).size, costs.length, `${category} should not have two items at the exact same price`);
+    const sorted = [...costs].sort((a, b) => a - b);
+    assert.deepEqual(costs, sorted, `${category}'s items should already be listed cheapest-to-priciest`);
+  }
+});
+
+test("every catalog item has a unique key within its category and a non-empty display name", () => {
+  for (const category of Object.keys(COSMETICS_CATALOG)) {
+    const keys = COSMETICS_CATALOG[category].map((c) => c.key);
+    assert.equal(new Set(keys).size, keys.length, `${category} should have no duplicate keys`);
+    for (const item of COSMETICS_CATALOG[category]) {
+      assert.equal(typeof item.name, "string");
+      assert.ok(item.name.trim().length > 0);
+    }
   }
 });

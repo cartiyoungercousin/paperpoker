@@ -1,4 +1,4 @@
-// Deployed on Railway.
+// Deployed on Railway, backed by a persistent volume at /data.
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";

@@ -4055,6 +4055,21 @@ html[data-ripple="rainbow"] .click-ripple {
   border: 1px solid rgba(255, 255, 255, 0.1)
 }
 
+/* Longer text than SB/BB, so it overrides the base .badge circle with a
+   pill-shaped box instead - still hard-cornered (border-radius:0), matching
+   the rest of the site's flat-edge styling. */
+.aib {
+  width: auto;
+  height: auto;
+  padding: 1px 4px;
+  border-radius: 0;
+  background: rgba(239, 83, 80, 0.15);
+  color: #ef5350;
+  border: 1px solid rgba(239, 83, 80, 0.4);
+  margin-left: 3px;
+  white-space: nowrap
+}
+
 /* ===== Player Area =====
    Now also holds #action-bar (see its own comment) so the hole cards and
    the action buttons sit in one row - max-width widened from 880 to fit

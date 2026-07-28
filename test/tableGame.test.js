@@ -8,6 +8,7 @@ import { TOURNAMENT_FIXED_SETTINGS, TOURNAMENT_ROUND_HANDS_TOTAL, TOURNAMENT_ROU
 import { HEADS_UP_ONLY_DIFFICULTIES, BOARDROOM_CHARACTERS } from "../src/tableGame.js";
 import { computeHandCoinsDelta } from "../src/coins.js";
 import { findPowerUp } from "../src/powerUps.js";
+import { cardToString } from "../src/deck.js";
 
 function cancelPendingBotTimer(game) {
   if (game.botTimeout) {
@@ -1100,9 +1101,14 @@ test("hand-history logs the street-closing action before the new street's divide
     assert.ok(game.applyPlayerAction("You", "check"));
 
     // The check that just closed preflop must be logged BEFORE the flop
-    // divider, not after it (this is the human-action logging path).
-    assert.deepEqual(game.handHistory.slice(-2), ["You: check", "--- FLOP ---"],
-      "the BB's preflop-closing check must appear before the FLOP divider, not be mislabeled as a flop action");
+    // divider, not after it (this is the human-action logging path). The
+    // divider itself now also carries the actual flop cards dealt
+    // ("--- FLOP: Kh 8s 3c ---"), not just the bare street name - exact
+    // cards are a real random deal here, so only the prefix is checked.
+    const [closingLine, flopDivider] = game.handHistory.slice(-2);
+    assert.equal(closingLine, "You: check");
+    assert.ok(flopDivider.startsWith("--- FLOP: ") && flopDivider.endsWith(" ---"),
+      `expected a FLOP divider carrying the dealt cards, got: ${flopDivider}`);
 
     await nextStateChanged(); // Victoria (SB) checks first on the flop
     assert.equal(game.handHistory[game.handHistory.length - 1], "Victoria: check");
@@ -1114,11 +1120,83 @@ test("hand-history logs the street-closing action before the new street's divide
     assert.equal(game.hand.currentStreetName(), "flop", "still on the flop - no divider should have been added");
 
     await nextStateChanged(); // James checks last, closing the flop (bot-action logging path)
-    assert.deepEqual(game.handHistory.slice(-2), ["James: check", "--- TURN ---"],
+    const [flopCloseLine, turnDivider] = game.handHistory.slice(-2);
+    assert.equal(flopCloseLine, "James: check",
       "the flop-closing check must appear before the TURN divider, not be mislabeled as a turn action");
+    assert.ok(turnDivider.startsWith("--- TURN: ") && turnDivider.endsWith(" ---"),
+      `expected a TURN divider carrying the dealt card, got: ${turnDivider}`);
 
     cancelPendingBotTimer(game);
   } finally {
     Math.random = originalRandom;
   }
+});
+
+// Regression test for a reported bug: when an all-in run-out closes
+// preflop/flop/turn all in one synchronous hand.applyAction() call (no more
+// betting is possible once everyone's all-in), the hand-history log used to
+// only push a divider for the FINAL street reached, making it read as if
+// the game had skipped straight from preflop to the river with no flop or
+// turn ever happening - they did happen, they just never got logged.
+test("hand-history logs every intermediate street divider when an all-in run-out skips straight to the river", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 200, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.dealerIndex = 1; // bot is SB/dealer, acts first preflop; "You" is BB
+  game.startNewHand();
+  const botId = game.players.find((p) => p.type === "bot").id;
+  cancelPendingBotTimer(game);
+
+  // Bot shoves all-in preflop (bypassing TableGame's own history-pushing
+  // wrapper is fine here - this isn't the street-closing action under test).
+  game.hand.applyAction(botId, "raise", 200);
+  assert.equal(game.hand.actingPlayerId(), "You");
+
+  // "You" calling closes the betting round with both players all-in, which
+  // cascades hand.js straight through flop/turn/river to hand.complete in
+  // one call - this IS the action under test, going through TableGame's
+  // real applyPlayerAction wrapper.
+  assert.ok(game.applyPlayerAction("You", "call"));
+  assert.ok(game.hand.complete);
+  assert.equal(game.hand.currentStreetName(), "river");
+
+  // Each divider now also carries the cards actually dealt on that street
+  // (not just the bare street name) - a divider with nothing under it (no
+  // betting happens on any of these streets in an all-in run-out) would
+  // otherwise tell the reader nothing about what came.
+  const dividers = game.handHistory.filter((line) => /^--- (FLOP|TURN|RIVER):/.test(line));
+  assert.deepEqual(dividers.map((d) => d.split(":")[0]), ["--- FLOP", "--- TURN", "--- RIVER"],
+    `expected exactly one FLOP/TURN/RIVER divider each, in order, got: ${JSON.stringify(dividers)}`);
+
+  // A multi-street jump (more than one divider from a single action) should
+  // also explain WHY no betting follows - nobody left has any chips.
+  assert.ok(game.handHistory.includes("Everyone remaining is all-in - dealing out the rest of the board"));
+
+  const board = game.hand.board;
+  assert.equal(dividers[0], `--- FLOP: ${board.slice(0, 3).map(cardToString).join(" ")} ---`);
+  assert.equal(dividers[1], `--- TURN: ${cardToString(board[3])} ---`);
+  assert.equal(dividers[2], `--- RIVER: ${cardToString(board[4])} ---`);
+});
+
+// Regression coverage for the client-facing seat badge that explains WHY no
+// betting happens on a run-out street: a live (not-folded) player with 0
+// chips left is flagged allIn:true in getState()'s player list.
+test("getState() flags a player as allIn once they've committed their entire stack, but not a folded player at 0 or a live player with chips left", () => {
+  const game = new TableGame({ numPlayers: 3, startingStack: 200, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.dealerIndex = 0; // "You" = dealer/BTN, James = SB, Victoria = BB
+  game.startNewHand();
+  const botId = "James";
+
+  assert.equal(game.hand.actingPlayerId(), "You");
+  assert.ok(game.applyPlayerAction("You", "raise", 200)); // "You" shoves the full 200 stack
+  game.hand.applyAction(botId, "fold"); // James folds - stays at 0 contributed, never all-in
+  assert.equal(game.hand.actingPlayerId(), "Victoria");
+  game.hand.applyAction("Victoria", "call"); // Victoria calls the shove with her own full 200 stack
+
+  const you = game.getState().players.find((p) => p.id === "You");
+  const james = game.getState().players.find((p) => p.id === "James");
+  const victoria = game.getState().players.find((p) => p.id === "Victoria");
+  assert.equal(you.allIn, true, "You shoved your entire stack");
+  assert.equal(victoria.allIn, true, "Victoria called it off with her entire stack too");
+  assert.equal(james.allIn, false, "James folded rather than committing any chips - not all-in");
 });

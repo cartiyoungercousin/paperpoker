@@ -3261,29 +3261,36 @@
 
       // Board - the 3 flop slots (i<3) always show a face-down card back
       // rather than an empty slot while waiting to be dealt (the equipped
-      // card back gets real screen time this way, not just on hole cards),
-      // and flip face-up with a real turn animation the one render where
-      // the flop actually lands. Turn/river (i>=3) keep the plain
-      // empty-until-dealt behavior - they're revealed one at a time already,
-      // which reads as its own moment without needing a flip.
+      // card back gets real screen time this way, not just on hole cards).
+      // Any card whose index is at/after where the board stood on the
+      // PREVIOUS render is "newly revealed" and gets a staggered flip -
+      // covers both the normal case (exactly one new card lands on the
+      // turn/river) and an all-in run-out, where several streets' worth of
+      // cards can land in the very same render because the whole rest of
+      // the hand resolved in one synchronous server-side cascade (once
+      // everyone's all-in there's no more betting, so hand.js closes
+      // flop/turn/river back to back with no pause in between - see
+      // TableGame._pushStreetDividers's own comment for the hand-history
+      // side of this same situation). Without staggering every newly-
+      // revealed card here, not just the flop's, an all-in board used to
+      // just pop into existence fully dealt instead of reading as a deal.
       const newBoardLength = (state.board || []).length;
-      const flopJustRevealed = prevBoardLength === 0 && newBoardLength >= 3;
       document.querySelectorAll('.bc').forEach((el, i) => {
         const card = state.board && state.board[i] ? state.board[i] : null;
-        if (i < 3) {
+        const justRevealed = card && i >= prevBoardLength;
+        if (justRevealed) {
           el.className = 'bc';
-          if (card && flopJustRevealed) {
-            el.innerHTML = '<div class="bc-flip"><div class="bc-flip-inner">' +
-              '<div class="bc-flip-face bc-flip-front">' + cHTML(null) + '</div>' +
-              '<div class="bc-flip-face bc-flip-back">' + cHTML(card) + '</div>' +
-            '</div></div>';
-            const wrap = el.querySelector('.bc-flip');
-            // Staggered per-card, not simultaneous - reads as a dealer
-            // turning them over in sequence rather than one flat flip.
-            setTimeout(() => { if (wrap) wrap.classList.add('flipped'); }, 120 * i);
-          } else {
-            el.innerHTML = cHTML(card); // cHTML(null) already renders a face-down card-back
-          }
+          el.innerHTML = '<div class="bc-flip"><div class="bc-flip-inner">' +
+            '<div class="bc-flip-face bc-flip-front">' + cHTML(null) + '</div>' +
+            '<div class="bc-flip-face bc-flip-back">' + cHTML(card) + '</div>' +
+          '</div></div>';
+          const wrap = el.querySelector('.bc-flip');
+          // Staggered per-card, not simultaneous - reads as a dealer
+          // turning them over in sequence rather than one flat flip.
+          setTimeout(() => { if (wrap) wrap.classList.add('flipped'); }, 120 * (i - prevBoardLength));
+        } else if (i < 3) {
+          el.className = 'bc';
+          el.innerHTML = cHTML(card); // cHTML(null) already renders a face-down card-back
         } else {
           if (card) { el.className = 'bc'; el.innerHTML = cHTML(card); }
           else { el.className = 'bc empty'; el.innerHTML = ''; }
@@ -3330,6 +3337,11 @@
         let badge = '';
         if (isSB) badge = '<span class="badge sbb">SB</span>';
         else if (isBB) badge = '<span class="badge bbb">BB</span>';
+        // Shown alongside SB/BB, not instead of it - a player can be both.
+        // This is what makes an all-in run-out (several streets dealt with
+        // no betting shown, because nobody left has any chips to bet with)
+        // read as the normal poker moment it is instead of looking stalled.
+        if (p.allIn && !p.folded) badge += '<span class="badge aib">ALL-IN</span>';
         const cards = (p.holeCards||[]).map(c => csHTML(c, !you && !state.complete)).join(' ');
         const lastAct = lastActions[p.id];
         let lastActHTML = '';

@@ -10,7 +10,7 @@ import { getRockAction } from "./bots/rockBot.js";
 import { getManiacAction } from "./bots/maniacBot.js";
 import { describeScore, bestHand, CATEGORY } from "./handEvaluator.js";
 import { computeAllInEquity } from "./equity.js";
-import { rankName } from "./deck.js";
+import { rankName, cardToString } from "./deck.js";
 import { xpForHand } from "./rankTiers.js";
 import { pickLine } from "./botDialogue.js";
 import { computeHandCoinsDelta, HAND_COINS_REWARD } from "./coins.js";
@@ -341,6 +341,39 @@ class TableGame extends EventEmitter {
   // that would normally trigger a snapshot - once everyone's all-in no more
   // betting happens, so the pot total is identical across all those streets,
   // making it safe to reuse the current pot total for each backfilled entry.
+  // Pushes a "--- STREET ---" divider for every street between prevStreet
+  // and newStreet (exclusive/inclusive respectively), not just newStreet
+  // itself - an all-in run-out can close preflop/flop/turn all in one
+  // synchronous hand.applyAction() call (see _recordAction's own comment
+  // below for why), which used to silently skip logging the flop/turn
+  // dividers entirely and made the hand history read as if the game had
+  // jumped straight from preflop to river.
+  _pushStreetDividers(prevStreet, newStreet) {
+    if (newStreet === prevStreet) return;
+    const prevIdx = STREETS_ORDER.indexOf(prevStreet);
+    const newIdx = STREETS_ORDER.indexOf(newStreet);
+    // More than one street closing off a single action means nobody left in
+    // the hand has any chips left to bet with (see this method's own
+    // top-of-function comment) - called out explicitly so a run of dividers
+    // with no betting underneath them reads as the normal all-in moment it
+    // is, not a stall. A single-street jump is the everyday case and needs
+    // no such note.
+    if (newIdx > prevIdx + 1) {
+      this.handHistory.push("Everyone remaining is all-in - dealing out the rest of the board");
+    }
+    for (let idx = prevIdx + 1; idx <= newIdx; idx++) {
+      const streetName = STREETS_ORDER[idx];
+      // The cards dealt specifically ON this street (not the whole board so
+      // far) - e.g. just the turn's one new card, not flop+turn together.
+      // Without this, a divider with no action underneath it (an all-in
+      // run-out skips betting on flop/turn/river entirely) told the reader
+      // nothing about what actually came - just an empty header.
+      const dealtThisStreet = this.hand.board.slice(STREET_BOARD_LEN[STREETS_ORDER[idx - 1]], STREET_BOARD_LEN[streetName]);
+      const cardsStr = dealtThisStreet.map(cardToString).join(" ");
+      this.handHistory.push(`--- ${streetName.toUpperCase()}: ${cardsStr} ---`);
+    }
+  }
+
   _recordAction(playerId, action, amount, prevStreet, facing) {
     this.currentHandActions.push({
       actor: playerId, action, amount: amount || 0, street: prevStreet,
@@ -483,6 +516,12 @@ class TableGame extends EventEmitter {
         id: p.id, type: p.type, seat: p.seat, stack, contributed, colorClass: p.colorClass,
         folded: isFolded, isDealer: false, displayName: p.displayName || p.id,
         holeCards: hole, active: this.hand.actingPlayerId() === p.id && !this.hand.complete,
+        // A live (not-folded) player with 0 chips left has already
+        // committed their entire stack - the client uses this to badge
+        // them "ALL-IN" so a run-out with no more betting (everyone left
+        // is all-in, so there's no legal action left for anyone to take)
+        // reads as the normal, correct poker moment it is, not a stall.
+        allIn: !isFolded && stack === 0,
       };
     });
 
@@ -709,9 +748,7 @@ class TableGame extends EventEmitter {
       // divider for a street it just closed), then add a marker if it opened a new one.
       this.handHistory.push(`${this._displayNameFor(playerId)}: ${action}${amtStr}`);
       const newStreet = this.hand.currentStreetName();
-      if (newStreet !== prevStreet) {
-        this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
-      }
+      this._pushStreetDividers(prevStreet, newStreet);
       // Track last action for display
       this.lastActions[playerId] = { action, amount: amount || 0, street: newStreet };
       this._recordAction(playerId, action, amount, prevStreet, facing);
@@ -851,9 +888,7 @@ class TableGame extends EventEmitter {
         const amtStr = decision.amount ? ` ${decision.amount}` : "";
         this.handHistory.push(`${this._displayNameFor(actingId)}: ${decision.action}${amtStr}`);
         const newStreet = this.hand.currentStreetName();
-        if (newStreet !== prevStreet) {
-          this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
-        }
+        this._pushStreetDividers(prevStreet, newStreet);
         this.lastActions[actingId] = { action: decision.action, amount: decision.amount || 0, street: newStreet };
         this._recordAction(actingId, decision.action, decision.amount, prevStreet, facing);
         for (const p of this.players) {
@@ -882,9 +917,7 @@ class TableGame extends EventEmitter {
           this.hand.applyAction(actingId, fallback);
           this.handHistory.push(`${this._displayNameFor(actingId)}: ${fallback} (fb)`);
           const fbStreet = this.hand.currentStreetName();
-          if (fbStreet !== prevStreet) {
-            this.handHistory.push(`--- ${fbStreet.toUpperCase()} ---`);
-          }
+          this._pushStreetDividers(prevStreet, fbStreet);
           this.lastActions[actingId] = { action: fallback, amount: 0, street: fbStreet };
           this._recordAction(actingId, fallback, 0, prevStreet);
           this.emit('stateChanged');

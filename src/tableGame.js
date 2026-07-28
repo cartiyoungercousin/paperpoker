@@ -705,12 +705,13 @@ class TableGame extends EventEmitter {
     try {
       this.hand.applyAction(playerId, action, amount);
       const amtStr = amount ? ` ${amount}` : "";
-      // Add street marker if street changed
+      // Log the action under the street it was actually taken on (before any
+      // divider for a street it just closed), then add a marker if it opened a new one.
+      this.handHistory.push(`${this._displayNameFor(playerId)}: ${action}${amtStr}`);
       const newStreet = this.hand.currentStreetName();
       if (newStreet !== prevStreet) {
         this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
       }
-      this.handHistory.push(`${this._displayNameFor(playerId)}: ${action}${amtStr}`);
       // Track last action for display
       this.lastActions[playerId] = { action, amount: amount || 0, street: newStreet };
       this._recordAction(playerId, action, amount, prevStreet, facing);
@@ -848,11 +849,11 @@ class TableGame extends EventEmitter {
       try {
         this.hand.applyAction(actingId, decision.action, decision.amount);
         const amtStr = decision.amount ? ` ${decision.amount}` : "";
+        this.handHistory.push(`${this._displayNameFor(actingId)}: ${decision.action}${amtStr}`);
         const newStreet = this.hand.currentStreetName();
         if (newStreet !== prevStreet) {
           this.handHistory.push(`--- ${newStreet.toUpperCase()} ---`);
         }
-        this.handHistory.push(`${this._displayNameFor(actingId)}: ${decision.action}${amtStr}`);
         this.lastActions[actingId] = { action: decision.action, amount: decision.amount || 0, street: newStreet };
         this._recordAction(actingId, decision.action, decision.amount, prevStreet, facing);
         for (const p of this.players) {
@@ -880,7 +881,11 @@ class TableGame extends EventEmitter {
           const fallback = leg.check ? "check" : "fold";
           this.hand.applyAction(actingId, fallback);
           this.handHistory.push(`${this._displayNameFor(actingId)}: ${fallback} (fb)`);
-          this.lastActions[actingId] = { action: fallback, amount: 0, street: this.hand.currentStreetName() };
+          const fbStreet = this.hand.currentStreetName();
+          if (fbStreet !== prevStreet) {
+            this.handHistory.push(`--- ${fbStreet.toUpperCase()} ---`);
+          }
+          this.lastActions[actingId] = { action: fallback, amount: 0, street: fbStreet };
           this._recordAction(actingId, fallback, 0, prevStreet);
           this.emit('stateChanged');
           if (this.hand.complete) this.handleHandComplete();

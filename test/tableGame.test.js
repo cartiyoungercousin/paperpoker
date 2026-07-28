@@ -1064,3 +1064,61 @@ test("an exact tie for the top stack is reported as NOT won and tied:true - unli
   assert.equal(payload.won, false, "an exact tie must not count as a win");
   assert.equal(payload.tied, true);
 });
+
+// Regression test for a reported bug: hand-history looked like the same
+// player checked twice in a row across a street boundary (e.g. "Sebastian:
+// check" / "Sebastian: check" straddling "--- FLOP ---"). The engine's turn
+// order was always correct - this was a pure logging bug. applyPlayerAction
+// used to push the "--- NEWSTREET ---" divider BEFORE the action line for
+// whichever action closed the previous street, because it read
+// currentStreetName() (already advanced by hand.applyAction) before logging
+// the action that caused the advance. That misattributed the closing action
+// to the new street, so when the same player also happened to act first on
+// the next street (very common - e.g. the small blind folds, leaving the big
+// blind to act first postflop too), the log showed that one player's two
+// separate, legitimate actions bunched together right after the divider,
+// looking like a duplicate.
+test("hand-history logs the street-closing action before the new street's divider, not after", async () => {
+  const originalRandom = Math.random;
+  // Pins easyBot's decisions deterministically: 0.5 is below the 0.65
+  // call-threshold (so it never folds) but not below the 0.25 bet/raise
+  // threshold (so it never bets/raises) - i.e. always check-or-call.
+  Math.random = () => 0.5;
+  try {
+    const game = new TableGame({ numPlayers: 3, startingStack: 1000, smallBlind: 5, bigBlind: 10, difficulty: "easy" });
+    game.gameStarted = true;
+    game.turboMode = true; // 500ms bot timers instead of 2.5-4s, so the test isn't slow
+    game.dealerIndex = 1; // James is dealer/UTG; Victoria is SB; "You" is BB
+    const nextStateChanged = () => new Promise((resolve) => game.once("stateChanged", resolve));
+
+    game.startNewHand(); // schedules James's (UTG) bot turn
+
+    await nextStateChanged(); // James calls
+    await nextStateChanged(); // Victoria (SB) calls
+
+    assert.equal(game.hand.actingPlayerId(), "You", "BB should close preflop with their option");
+    assert.ok(game.applyPlayerAction("You", "check"));
+
+    // The check that just closed preflop must be logged BEFORE the flop
+    // divider, not after it (this is the human-action logging path).
+    assert.deepEqual(game.handHistory.slice(-2), ["You: check", "--- FLOP ---"],
+      "the BB's preflop-closing check must appear before the FLOP divider, not be mislabeled as a flop action");
+
+    await nextStateChanged(); // Victoria (SB) checks first on the flop
+    assert.equal(game.handHistory[game.handHistory.length - 1], "Victoria: check");
+    assert.equal(game.hand.currentStreetName(), "flop");
+
+    assert.equal(game.hand.actingPlayerId(), "You");
+    assert.ok(game.applyPlayerAction("You", "check"));
+    assert.equal(game.handHistory[game.handHistory.length - 1], "You: check");
+    assert.equal(game.hand.currentStreetName(), "flop", "still on the flop - no divider should have been added");
+
+    await nextStateChanged(); // James checks last, closing the flop (bot-action logging path)
+    assert.deepEqual(game.handHistory.slice(-2), ["James: check", "--- TURN ---"],
+      "the flop-closing check must appear before the TURN divider, not be mislabeled as a turn action");
+
+    cancelPendingBotTimer(game);
+  } finally {
+    Math.random = originalRandom;
+  }
+});

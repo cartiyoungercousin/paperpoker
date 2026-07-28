@@ -82,7 +82,7 @@ class TableGame extends EventEmitter {
     }
     this.assignSeats();
 
-    this.dealerIndex = 0;
+    this.dealerIndex = this._initialDealerIndex();
     this.hand = null;
     this.handHistory = [];
     this.dealingNewHand = false;
@@ -215,6 +215,18 @@ class TableGame extends EventEmitter {
     this.players.forEach((player, idx) => {
       player.seat = idx;
     });
+  }
+
+  // Marcus is always the dealer/first-actor for a fresh game - a
+  // deliberate fixed identity to open with, rather than the default
+  // dealerIndex 0 (which would otherwise be "You", since the human is
+  // always seated first - see _buildSoloPlayers). Falls back to seat 0
+  // when Marcus isn't actually seated (heads-up-only difficulties, The
+  // Boardroom's own cast, room mode, or fewer than 3 bots at the table -
+  // see BOT_NAMES), rather than throwing.
+  _initialDealerIndex() {
+    const idx = this.players.findIndex((p) => p.id === "Marcus");
+    return idx >= 0 ? idx : 0;
   }
 
   // Builds the solo "You" + N bots player list, forcing the seat count for
@@ -774,8 +786,8 @@ class TableGame extends EventEmitter {
     // Emit botTurn event so client can play a sound
     this.emit("botTurn", { playerId: actingId });
 
-    // Delay between 1-2 seconds for smooth bot play (50-150ms in turbo mode)
-    const delay = this.turboMode ? 50 + Math.floor(Math.random() * 100) : 1000 + Math.floor(Math.random() * 1000);
+    // Delay between 2.5-4 seconds for smooth bot play (a flat 500ms in turbo mode)
+    const delay = this.turboMode ? 500 : 2500 + Math.floor(Math.random() * 1500);
     this._lastBotDelay = delay; // exposed for tests
 
     this.botTimeout = setTimeout(() => {
@@ -1354,7 +1366,7 @@ class TableGame extends EventEmitter {
     this.currentHandActions = [];
     this.streetSnapshots = [];
     this.sessionStart = Date.now();
-    this.dealerIndex = 0;
+    this.dealerIndex = this._initialDealerIndex();
     this.isPaused = false;
     // A fresh game always starts unranked - the caller re-applies ranked mode
     // (via setRankedMode) right after, if the player chose it, since starting

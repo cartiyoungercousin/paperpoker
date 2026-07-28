@@ -426,6 +426,38 @@ test("a non-Boardroom, non-heads-up-only difficulty is unaffected by the seat-fo
   assert.equal(game.players.length, 4);
 });
 
+// ===== Marcus always opens the round =====
+
+test("a fresh 6-player table starts dealt to Marcus, not seat 0 (\"You\")", () => {
+  const game = new TableGame({ numPlayers: 6, difficulty: "easy" });
+  const marcusSeat = game.players.find((p) => p.id === "Marcus").seat;
+  assert.equal(marcusSeat, 3, "Marcus is always the 3rd bot seated - see BOT_NAMES");
+  assert.equal(game.dealerIndex, marcusSeat);
+});
+
+test("updateSettings also resets dealerIndex back to Marcus's seat, not 0", () => {
+  const game = new TableGame({ numPlayers: 6, difficulty: "easy" });
+  game.dealerIndex = 5; // simulate several hands' worth of button rotation
+  game.updateSettings({ numPlayers: 6, difficulty: "medium" });
+  const marcusSeat = game.players.find((p) => p.id === "Marcus").seat;
+  assert.equal(game.dealerIndex, marcusSeat);
+});
+
+test("dealerIndex falls back to seat 0 when Marcus isn't seated at all (too few bots)", () => {
+  const game = new TableGame({ numPlayers: 2, difficulty: "easy" });
+  assert.equal(game.players.some((p) => p.id === "Marcus"), false);
+  assert.equal(game.dealerIndex, 0);
+});
+
+test("dealerIndex falls back to seat 0 for heads-up-only difficulties and The Boardroom, where Marcus never exists", () => {
+  const headsUp = new TableGame({ numPlayers: 6, difficulty: "drunk" });
+  assert.equal(headsUp.dealerIndex, 0);
+
+  const boardroom = new TableGame({ difficulty: "boardroom" });
+  assert.equal(boardroom.players.some((p) => p.id === "Marcus"), false);
+  assert.equal(boardroom.dealerIndex, 0);
+});
+
 test("_personaForBot resolves each Boardroom seat to its own persona, and every other difficulty to a single table-wide persona", () => {
   const boardroom = new TableGame({ difficulty: "boardroom" });
   for (const character of BOARDROOM_CHARACTERS) {

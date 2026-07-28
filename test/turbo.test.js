@@ -20,12 +20,12 @@ test("bot turn delay is short (turbo) vs. normal, based on turboMode", () => {
   game.dealerIndex = 1; // heads-up: bot is SB/dealer, acts first - checkBotTurn() fires immediately
   game.startNewHand();
 
-  assert.ok(game._lastBotDelay >= 1000 && game._lastBotDelay < 2000, "normal delay should be 1-2s");
+  assert.ok(game._lastBotDelay >= 2500 && game._lastBotDelay < 4000, "normal delay should be 2.5-4s");
   cancelPendingBotTimer(game);
 
   game.turboMode = true;
   game.startNewHand(); // re-deal so checkBotTurn() runs again with turbo on
-  assert.ok(game._lastBotDelay >= 50 && game._lastBotDelay < 150, "turbo delay should be 50-150ms");
+  assert.equal(game._lastBotDelay, 500, "turbo delay should be a flat 500ms");
   cancelPendingBotTimer(game);
 });
 

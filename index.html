@@ -245,7 +245,7 @@
 
         <div id="home-actions">
           <button id="btn-start-unranked" class="primary-action-btn unranked-btn" type="button">▶ Unranked Singleplayer</button>
-          <button id="btn-start-ranked" class="primary-action-btn ranked-btn" type="button">🏆 Ranked Singleplayer</button>
+          <button id="btn-start-ranked" class="primary-action-btn ranked-btn" type="button">Ranked Singleplayer</button>
         </div>
       </div>
 
@@ -975,9 +975,9 @@
         <a id="logo-link" href="#">♠ Paper Poker</a>
         <span id="hu"></span>
         <span id="hm">Easy</span>
-        <span id="hranked" class="hidden">🏆 Ranked</span>
-        <span id="hrumble" class="hidden">🎲 Rumble</span>
-        <span id="htournament" class="hidden">🏅 Tournament</span>
+        <span id="hranked" class="hidden">Ranked</span>
+        <span id="hrumble" class="hidden">Rumble</span>
+        <span id="htournament" class="hidden">Tournament</span>
         <span id="hroom" class="hidden"></span>
       </div>
       <div id="hc">
@@ -1033,30 +1033,46 @@
               <span id="pot-label">POT</span>
               <span id="pot-value">$0</span>
             </div>
-            <!-- Result overlay -->
-            <div id="result-overlay" class="hidden">
-              <div id="result-content">
-                <h2 id="result-title">Hand Complete</h2>
-                <div id="result-details"></div>
-                <div id="result-actions">
-                  <button id="btn-next-hand">Next Hand</button>
-                  <button id="btn-analyze-hand" class="sec-btn">Analyze Hand</button>
-                  <label id="toggle-reset-label"><input type="checkbox" id="toggle-reset" /> Reset balance each hand</label>
-                </div>
-              </div>
-            </div>
           </div>
           <!-- Seat containers -->
           <div id="seats-container"></div>
           <!-- Bot chat bubbles - a separate, persistent container so a fading
                bubble isn't wiped out by the next seats-container re-render. -->
           <div id="bot-chat-container"></div>
+          <!-- Result overlay - a sibling of #table-felt/#seats-container (not
+               nested inside #table-felt) deliberately: #table-felt only has
+               z-index:2 while #seats-container has z-index:5, so anything
+               nested inside #table-felt (like this used to be) has its own
+               z-index capped at effectively "2" from #seats-container's
+               point of view - z-index only ever competes within the SAME
+               stacking context, a child can't out-rank its parent's
+               siblings just by setting a bigger number itself. That's what
+               let the "You" seat's stack-size text swallow clicks on the
+               Reset-balance checkbox underneath it. As a direct sibling
+               here, this overlay's own z-index (see styles.css) is finally
+               compared against #seats-container's on equal footing. -->
+          <div id="result-overlay" class="hidden">
+            <div id="result-content">
+              <h2 id="result-title">Hand Complete</h2>
+              <div id="result-details"></div>
+              <div id="result-actions">
+                <button id="btn-next-hand">Next Hand</button>
+                <button id="btn-analyze-hand" class="sec-btn">Analyze Hand</button>
+                <label id="toggle-reset-label"><input type="checkbox" id="toggle-reset" /> Reset balance each hand</label>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- Action Popups -->
         <div id="action-popup-area"></div>
 
-        <!-- Player's cards -->
+        <!-- Player's cards + action buttons, one row - action-bar lives here
+             now (not a separate row below) so it sits side by side with the
+             enlarged hole cards, and its space is always reserved (see
+             #action-bar.inactive in styles.css, opacity/visibility rather
+             than display:none) so the whole table never jumps vertically
+             the moment it becomes your turn. -->
         <div id="player-area">
           <div id="player-cards">
             <div class="pc" data-i="0"></div>
@@ -1089,18 +1105,18 @@
               <button id="btn-activate-powerup" class="rpu-activate-btn" type="button">Activate</button>
             </div>
           </div>
-        </div>
 
-        <!-- Action Buttons -->
-        <div id="action-bar" style="display:none">
-          <button id="btn-fold" class="act-btn fold-btn">Fold</button>
-          <button id="btn-check" class="act-btn check-btn">Check</button>
-          <button id="btn-call" class="act-btn call-btn">Call</button>
-          <div id="bet-area" style="display:none">
-            <input type="range" id="bet-slider" min="20" max="1000" step="10" value="20" />
-            <input type="number" id="bet-amount" value="20" />
-            <button id="btn-bet" class="act-btn bet-btn">Bet</button>
-            <button id="btn-raise" class="act-btn raise-btn">Raise</button>
+          <!-- Action Buttons -->
+          <div id="action-bar" class="inactive">
+            <button id="btn-fold" class="act-btn fold-btn">Fold</button>
+            <button id="btn-check" class="act-btn check-btn">Check</button>
+            <button id="btn-call" class="act-btn call-btn">Call</button>
+            <div id="bet-area" style="display:none">
+              <input type="range" id="bet-slider" min="20" max="1000" step="10" value="20" />
+              <input type="number" id="bet-amount" value="20" />
+              <button id="btn-bet" class="act-btn bet-btn">Bet</button>
+              <button id="btn-raise" class="act-btn raise-btn">Raise</button>
+            </div>
           </div>
         </div>
         <div id="hotkey-hint">F Fold&nbsp;&nbsp;C Check/Call&nbsp;&nbsp;R Raise&nbsp;&nbsp;Enter Confirm&nbsp;&nbsp;Space Next Hand</div>
@@ -1269,10 +1285,17 @@
     }
 
     // ===== Computed seat positions (percentage-based for responsive layout) =====
+    // Base angle starts at pi/2 (bottom of the oval) rather than 3*pi/2
+    // (top) so seat 0 - "You", always seat 0, see TableGame._buildSoloPlayers -
+    // renders at bottom-middle, matching standard poker-table convention.
+    // For the default 6-seat table this also puts Marcus (seat 3, directly
+    // opposite You around the ring) at top-middle - a straight swap of
+    // where the two used to sit, with every other seat rotating along with
+    // them rather than needing special-cased per-name positioning.
     function computeSeats(n) {
       const seats = [];
       for (let i = 0; i < n; i++) {
-        const angle = (3 * Math.PI / 2) + (2 * Math.PI * i / n);
+        const angle = (Math.PI / 2) + (2 * Math.PI * i / n);
         const x = 50 + 46 * Math.cos(angle);
         const y = 50 + 42 * Math.sin(angle);
         seats.push({ t: y + '%', l: x + '%' });
@@ -1552,21 +1575,32 @@
     }
 
     // ===== Background Music =====
-    // Two tracks: a homepage/site-shell track (plays continuously across the
-    // Play/Range Trainer/Learn tabs, never restarted by switching between them)
-    // and a game track that swaps in once #app (the live table) is visible -
-    // covers solo/ranked-vs-bots and, later, private rooms with friends alike,
-    // since both are just "the live table is showing" from this code's view.
+    // A 5-track playlist (not a single looping file) for the whole site -
+    // homepage and in-game alike, one continuous queue rather than switching
+    // tracks or losing playback position every time the view changes. Plays
+    // straight through in order and wraps back to the first track once the
+    // last one ends (see the 'ended' listener below), rather than looping
+    // any single track forever.
+    const BG_PLAYLIST = [
+      'assets/audio/homepage_music_jazz.mp3',
+      'assets/audio/imageaudioteam-a-hip-hop-167724.mp3',
+      'assets/audio/jorisvermeer-happy-jazz-stroll-562368.mp3',
+      'assets/audio/music_for_creators-lemon-moon-360711.mp3',
+      'assets/audio/turning_pages-rua-da-saudade-519136.mp3',
+    ];
+    let bgPlaylistIndex = 0;
     let musicVolume = 0.375; // 25% lower than the original 0.5 default
     let musicMuted = false;
     let musicStarted = false;
-    // One continuous track for the whole site - homepage and in-game alike -
-    // rather than switching to a separate game track and losing playback
-    // position every time the view changes.
-    const bgMusic = new Audio('assets/audio/homepage_music_jazz.mp3');
-    bgMusic.loop = true;
+    const bgMusic = new Audio(BG_PLAYLIST[bgPlaylistIndex]);
+    bgMusic.loop = false; // the whole PLAYLIST loops (see 'ended' below), not any one track
     bgMusic.volume = 1; // raw element volume left at 1 - musicGainNode below is the single volume control point
-    bgMusic.addEventListener('error', () => console.warn('Background music failed to load - drop a file at assets/audio/homepage_music_jazz.mp3'));
+    bgMusic.addEventListener('error', () => console.warn('Background music failed to load:', BG_PLAYLIST[bgPlaylistIndex]));
+    bgMusic.addEventListener('ended', () => {
+      bgPlaylistIndex = (bgPlaylistIndex + 1) % BG_PLAYLIST.length;
+      bgMusic.src = BG_PLAYLIST[bgPlaylistIndex];
+      bgMusic.play().catch(() => {});
+    });
 
     // A second track that crossfades in over the bed during tense moments
     // (a big pot, an all-in) - see checkTensionTrigger() further down. Silent
@@ -1767,13 +1801,14 @@
       document.getElementById('site-shell').removeAttribute('data-diff');
     });
 
-    // ===== Background mouse light effect =====
-    // A soft spotlight, plus a subtle parallax shift of the suit-tile
-    // texture layer, that follows the cursor - both driven by CSS custom
-    // properties on #home-bg so the "luxury tile" background feels a
-    // little alive rather than static. rAF-throttled so a fast mouse
-    // doesn't spam layout/paint work.
-    (function setupHomeBgMouseLight() {
+    // ===== Background parallax effect =====
+    // A subtle parallax shift of the suit-tile texture layer that follows
+    // the cursor, via a CSS custom property on #home-bg - the "luxury tile"
+    // background feels a little alive rather than static. rAF-throttled so
+    // a fast mouse doesn't spam layout/paint work. (This used to also drive
+    // a spotlight/glow that tracked the cursor - removed per feedback,
+    // leaving just the texture parallax.)
+    (function setupHomeBgParallax() {
       const homeBg = document.getElementById('home-bg');
       if (!homeBg) return;
       let pending = null;
@@ -1785,16 +1820,12 @@
           if (rect.width === 0 || rect.height === 0) return;
           const xPct = ((e.clientX - rect.left) / rect.width) * 100;
           const yPct = ((e.clientY - rect.top) / rect.height) * 100;
-          homeBg.style.setProperty('--mouse-x', xPct + '%');
-          homeBg.style.setProperty('--mouse-y', yPct + '%');
           // A few px of parallax shift for the suit-tile layer, centered on
           // the middle of the viewport.
           homeBg.style.setProperty('--parallax-x', ((xPct - 50) / 50) * 12 + 'px');
           homeBg.style.setProperty('--parallax-y', ((yPct - 50) / 50) * 12 + 'px');
-          homeBg.classList.add('mouse-active');
         });
       });
-      document.addEventListener('mouseleave', () => homeBg.classList.remove('mouse-active'));
     })();
 
     // ===== Experimental Bots =====
@@ -1824,8 +1855,8 @@
             box.appendChild(lockEl);
           }
           lockEl.textContent = !currentUser
-            ? '🔒 Sign in to unlock'
-            : (info && info.unlockRank ? '🔒 Unlocks at ' + info.unlockRank : '🔒 Locked');
+            ? 'Sign in to unlock'
+            : (info && info.unlockRank ? 'Unlocks at ' + info.unlockRank : 'Locked');
         } else if (lockEl) {
           lockEl.remove();
         }
@@ -2365,9 +2396,9 @@
         } else if (item.owned) {
           action = '<button class="sec-btn customize-action-btn" data-action="equip" data-category="' + category + '" data-key="' + item.key + '">Equip</button>';
         } else if (rankLocked) {
-          action = '<span class="customize-locked-label">🔒 ' + (item.unlockRank ? 'Rank: ' + item.unlockRank : 'Rank-locked') + '</span>';
+          action = '<span class="customize-locked-label">' + (item.unlockRank ? 'Rank: ' + item.unlockRank : 'Rank-locked') + '</span>';
         } else if (tournamentLocked) {
-          action = '<span class="customize-locked-label">🏆 ' + escapeHtml(item.unlockHint || 'Tournament-exclusive') + '</span>';
+          action = '<span class="customize-locked-label">' + escapeHtml(item.unlockHint || 'Tournament-exclusive') + '</span>';
         } else {
           action = '<button class="sec-btn customize-action-btn" data-action="unlock" data-category="' + category + '" data-key="' + item.key + '">🪙 ' + item.cost + '</button>';
         }
@@ -3265,8 +3296,17 @@
           const amtStr = lastAct.amount > 0 ? ' $' + lastAct.amount : '';
           lastActHTML = '<div class="la">' + actStr + amtStr + '</div>';
         }
-        // Floating chip for active player
-        const chipHTML = isActive ? '<div class="turn-chip"></div>' : '';
+        // Floating pointer for the active player - a red hand rather than
+        // the old gold chip, easier to spot at a glance across a crowded
+        // table. A plain emoji hand keeps its own native (yellow/skin-tone)
+        // color regardless of CSS, so this is a small inline SVG instead -
+        // guaranteed red via fill="currentColor" + the wrapper's `color`.
+        // The seat box itself also gets a pulsing edge (see .seat.active
+        // in styles.css) so whose turn it is reads clearly even without
+        // staring at the pointer specifically.
+        const chipHTML = isActive
+          ? '<div class="turn-pointer"><svg viewBox="0 0 40 52" width="26" height="34"><rect x="8" y="4" width="24" height="20" rx="10"/><rect x="14" y="18" width="12" height="30" rx="6"/></svg></div>'
+          : '';
         const frozenHTML = isFrozen ? '<div class="rpu-frozen-badge">❄️ Frozen</div>' : '';
         // Only the human's own equipped nameFlair renders at the table - a
         // Tournament reward for winning a tier (see COSMETICS_CATALOG's
@@ -3293,13 +3333,11 @@
       const bar = document.getElementById('action-bar');
       const betArea = document.getElementById('bet-area');
       const showActions = !!state.legalActions && !state.complete;
-      if (showActions) {
-        bar.classList.remove('hidden');
-        bar.style.display = 'flex';
-      } else {
-        bar.classList.add('hidden');
-        bar.style.display = 'none';
-      }
+      // .inactive (opacity/visibility), not display:none - the action bar
+      // now lives inside #player-area, side by side with the hole cards,
+      // and needs to keep occupying its layout space at all times so the
+      // whole table doesn't jump vertically the instant it becomes your turn.
+      bar.classList.toggle('inactive', !showActions);
       if (showActions) {
         // Server-confirmed value, not the client's own Game Config setting -
         // ranked forces this to 15 regardless of what was picked locally, and
@@ -3354,7 +3392,19 @@
       const overlay = document.getElementById('result-overlay');
       if (state.complete && state.results) {
         overlay.classList.remove('hidden');
-        overlay.style.top = '45%'; overlay.style.left = '50%';
+        // Anchored by its TOP edge (see #result-overlay's own transform -
+        // horizontal centering only, no vertical translate) rather than
+        // centered on this point, so it always grows downward from a fixed
+        // position below the board - a taller showdown-detail list can
+        // never push its top edge back up into the community cards, which
+        // centering-with-translateY(-50%) used to risk. Positioned relative
+        // to #table-wrapper now (1260x590 - this overlay is a sibling of
+        // #table-felt/#seats-container, not nested inside #table-felt, see
+        // the HTML comment there for why), so 305px = #table-felt's own
+        // 55px top inset (centered: (590-480)/2) + 250px into the felt,
+        // clearing the board's bottom edge (community cards sit at 32% of
+        // the felt's 480px height) with real margin to spare.
+        overlay.style.top = '305px'; overlay.style.left = '50%';
         const payouts = state.results.payouts || {};
         const winners = Object.entries(payouts).filter(([id, a]) => a > 0);
         const youWon = winners.some(([id]) => isYou({id}));
@@ -3614,7 +3664,7 @@
       const canAfford = loggedIn && !rankLocked && coins >= tier.entryFee;
       const disabled = !loggedIn || rankLocked || !canAfford;
       const btnLabel = !loggedIn ? 'Log In to Enter'
-        : (rankLocked ? '🔒 Requires ' + tier.requiredRankLabel
+        : (rankLocked ? 'Requires ' + tier.requiredRankLabel
         : (!canAfford ? 'Not Enough Coins' : 'Enter'));
       const icon = TOURNAMENT_TIER_ICONS[tier.key] || '🏅';
       return '<div class="tournament-tier-bar' + (rankLocked ? ' tournament-tier-locked' : '') + '" data-tier-key="' + tier.key + '">' +
@@ -3624,7 +3674,7 @@
           '<h3 class="tournament-tier-name">' + escapeHtml(tier.name) + '</h3>' +
           '<div class="tournament-tier-stats">' +
             '<span class="tournament-tier-fee">🪙 ' + tier.entryFee + ' entry</span>' +
-            '<span class="tournament-tier-payout">🏆 ' + tier.payout + ' payout</span>' +
+            '<span class="tournament-tier-payout">' + tier.payout + ' payout</span>' +
             (tier.requiredRankLabel ? '<span class="tournament-tier-rank-req">🎖 ' + escapeHtml(tier.requiredRankLabel) + '+ rank</span>' : '') +
           '</div>' +
         '</div>' +
@@ -4278,7 +4328,7 @@
       }
 
       const bar = document.getElementById('action-bar');
-      const barVisible = bar && bar.style.display !== 'none';
+      const barVisible = bar && !bar.classList.contains('inactive');
       if (!barVisible) return;
 
       const key = e.key.toLowerCase();

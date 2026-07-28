@@ -1115,6 +1115,7 @@
             <div id="bet-area" style="display:none">
               <input type="range" id="bet-slider" min="20" max="1000" step="10" value="20" />
               <input type="number" id="bet-amount" value="20" />
+              <button id="btn-bet-max" class="sec-btn" type="button" title="Set the amount to your full stack (all-in)">MAX</button>
               <button id="btn-bet" class="act-btn bet-btn">Bet</button>
               <button id="btn-raise" class="act-btn raise-btn">Raise</button>
             </div>
@@ -1684,12 +1685,12 @@
     }
 
     // ===== Adaptive tension music =====
-    // Ramps the two per-track gains in opposite directions over 1.5s - a
-    // real crossfade (tension layers OVER the bed, ducked but not silenced,
-    // rather than one track cutting out while the other cuts in). A short
-    // cooldown between toggles stops the pot-fraction threshold from
-    // flapping the crossfade back and forth if it hovers right at the line
-    // across a couple of rapid state updates.
+    // Ramps the two per-track gains in opposite directions over 1.5s - the
+    // background bed fully silences while the tension track ramps in above
+    // its normal level, rather than an instant hard cut. A short cooldown
+    // between toggles stops the pot-fraction threshold from flapping the
+    // crossfade back and forth if it hovers right at the line across a
+    // couple of rapid state updates.
     let tensionActive = false;
     let lastTensionToggleAt = 0;
     const TENSION_RAMP_SECONDS = 1.5;
@@ -1705,10 +1706,18 @@
       const t = audioCtx.currentTime;
       bgTrackGain.gain.cancelScheduledValues(t);
       bgTrackGain.gain.setValueAtTime(bgTrackGain.gain.value, t);
-      bgTrackGain.gain.linearRampToValueAtTime(active ? 0.15 : 1, t + TENSION_RAMP_SECONDS);
+      // Background bed goes fully silent (not just ducked) during tension,
+      // and the tension track ramps ABOVE unity gain - genuinely louder than
+      // the background bed normally plays at, not just an equal swap. The
+      // 1.3x boost is deliberately modest: it still passes through the
+      // shared musicGainNode (overall musicVolume, default 0.375) before
+      // reaching the destination, so at typical volume settings this stays
+      // well under clipping range - a much higher multiplier here would risk
+      // clipping if a user ever raises the master music volume slider.
+      bgTrackGain.gain.linearRampToValueAtTime(active ? 0 : 1, t + TENSION_RAMP_SECONDS);
       tensionTrackGain.gain.cancelScheduledValues(t);
       tensionTrackGain.gain.setValueAtTime(tensionTrackGain.gain.value, t);
-      tensionTrackGain.gain.linearRampToValueAtTime(active ? 1 : 0, t + TENSION_RAMP_SECONDS);
+      tensionTrackGain.gain.linearRampToValueAtTime(active ? 1.3 : 0, t + TENSION_RAMP_SECONDS);
     }
     // Pure threshold decision lives in tension-music.js (testable without a
     // real Audio/browser environment) - this just feeds it the live state
@@ -3411,11 +3420,17 @@
           const slider = document.getElementById('bet-slider');
           const inp = document.getElementById('bet-amount');
           const minV = leg.minRaiseTo || 20, maxV = leg.maxRaiseTo || 1000;
-          slider.min = minV; slider.max = maxV; slider.value = minV;
+          // step must be 1 (not the markup's default 10) - real stacks are
+          // essentially never exact multiples of 10 apart from minV, so a
+          // step of 10 snapped every drag position except the literal final
+          // pixel of the track down to the nearest $10 below the true
+          // all-in total, making a precise all-in unreliable to drag to.
+          slider.min = minV; slider.max = maxV; slider.step = 1; slider.value = minV;
           inp.value = String(minV);
           inp.dataset.min = String(minV); inp.dataset.max = String(maxV);
           slider.oninput = () => { inp.value = slider.value; };
           inp.oninput = () => { slider.value = inp.value; };
+          document.getElementById('btn-bet-max').onclick = () => { slider.value = maxV; inp.value = String(maxV); };
           document.getElementById('btn-bet').style.display = leg.bet ? '' : 'none';
           document.getElementById('btn-raise').style.display = leg.raise ? '' : 'none';
         }

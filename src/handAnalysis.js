@@ -103,6 +103,23 @@ function buildHandAnalysis(tableGame) {
     } catch (e) {}
   }
 
+  // Distinct from yourBestHandDescription above (which is always "You"'s own
+  // hand, win or lose) - this is the hand that actually won the pot, so the
+  // analyzer can show both instead of leaving "Best Hand" ambiguous about
+  // whether it means "yours" or "the winner's". "won" is judged the same way
+  // the live result-overlay does: an actual chip payout, not just the raw
+  // showdown score comparison - that stays correct for split pots and for
+  // side pots a short stack isn't eligible for despite having the best cards.
+  let showdownResults = null;
+  if (hand.result && hand.result.showdown) {
+    const payouts = hand.result.payouts;
+    showdownResults = hand.result.showdown.results.map((r) => ({
+      id: r.id,
+      description: describeScore(r.score),
+      won: (payouts.get(r.id) || 0) > 0,
+    }));
+  }
+
   const allInSnap = hand.allInSnapshot;
   const allInCoversYou = !!(allInSnap && allInSnap.participants.some((p) => p.id === "You"));
 
@@ -180,6 +197,7 @@ function buildHandAnalysis(tableGame) {
     board: hand.board,
     holeCards: heroHoleCards,
     yourBestHandDescription,
+    showdownResults,
     totalContributed: Object.fromEntries(hand.totalContributed),
     order: hand.order,
     pots: hand.result ? hand.result.pots : [],

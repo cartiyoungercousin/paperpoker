@@ -598,6 +598,7 @@
       <div id="rank-results-tier-flourish" class="hidden">🎉 Rank Up!</div>
       <div id="rank-results-xp-bar-bg"><div id="rank-results-xp-bar-fill"></div></div>
       <div id="rank-results-xp-text"></div>
+      <div id="rank-results-showdown"></div>
       <button id="btn-rank-results-continue" class="primary-action-btn unranked-btn" type="button">Continue</button>
       <button id="btn-rank-results-again" class="primary-action-btn ranked-btn hidden" type="button">Play Again</button>
       <button id="btn-analyze-hand-ranked" class="sec-btn" type="button">Analyze Hand</button>
@@ -1148,7 +1149,8 @@
         <div id="analyzer-stats">
           <div class="arow"><span>Your Hand</span><span id="aa-hand">-</span></div>
           <div class="arow"><span>Board</span><span id="aa-board">-</span></div>
-          <div class="arow"><span>Best Hand</span><span id="aa-best">-</span></div>
+          <div class="arow"><span>Your Best Hand</span><span id="aa-best">-</span></div>
+          <div class="arow"><span>Winning Hand</span><span id="aa-winner">-</span></div>
           <div id="aa-luck-tag" class="hidden"></div>
         </div>
       </div>
@@ -1277,6 +1279,24 @@
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+    }
+
+    // Shared by the regular #result-overlay and the ranked results screen,
+    // so the "who had what, who won" showdown list looks and reads
+    // identically in both - the ranked screen needs it embedded directly
+    // (rather than relying on #result-overlay showing through underneath)
+    // since it's a full modal that would otherwise obscure it.
+    function buildShowdownRowsHtml(showdown, payouts, players) {
+      if (!showdown) return '';
+      let html = '';
+      showdown.results.forEach(r => {
+        const won = payouts[r.id] && payouts[r.id] > 0;
+        const winSpan = won ? '<span class="sdw">+$' + payouts[r.id] + '</span>' : '';
+        const rPlayer = players.find(p => p.id === r.id);
+        const rName = rPlayer ? rPlayer.displayName : r.id;
+        html += '<div class="sd-row ' + (won ? 'win' : '') + '"><span>' + escapeHtml(rName) + '</span><span class="sdh">' + (r.description || 'High Card') + '</span>' + winSpan + '</div>';
+      });
+      return html;
     }
 
     function getDisplayName(name) {
@@ -2955,6 +2975,19 @@
       document.getElementById('aa-board').textContent = board.length > 0 ? board.map(c => RD[c.rank] + SS[c.suit]).join(' ') : '-';
       document.getElementById('aa-best').textContent = data.yourBestHandDescription || '-';
 
+      const winnerEl = document.getElementById('aa-winner');
+      const winners = (data.showdownResults || []).filter(r => r.won);
+      if (winners.length > 0) {
+        const names = winners.map(r => {
+          const p = lastGameState && lastGameState.players ? lastGameState.players.find(pl => pl.id === r.id) : null;
+          const name = p ? p.displayName : r.id;
+          return name + ' – ' + r.description;
+        });
+        winnerEl.textContent = names.join(', ');
+      } else {
+        winnerEl.textContent = '-'; // hand ended without a showdown (everyone but one player folded)
+      }
+
       const tagEl = document.getElementById('aa-luck-tag');
       if (data.luckTag) {
         tagEl.classList.remove('hidden');
@@ -3390,7 +3423,14 @@
 
       // Results
       const overlay = document.getElementById('result-overlay');
-      if (state.complete && state.results) {
+      // Ranked hands skip this overlay entirely and show the same showdown
+      // info embedded inside #rank-results-modal instead (see
+      // showRankResultsScreen) - that modal already needs to appear right
+      // after every ranked hand for XP/rank progress and Continue/Play
+      // Again/Analyze, and showing this one too underneath it would either
+      // double up or (worse) get hidden behind it with no way to see who
+      // had what.
+      if (state.complete && state.results && !state.ranked) {
         overlay.classList.remove('hidden');
         // Anchored by its TOP edge (see #result-overlay's own transform -
         // horizontal centering only, no vertical translate) rather than
@@ -3411,17 +3451,7 @@
         if (youWon) { document.getElementById('result-title').textContent = 'YOU WIN!'; document.getElementById('result-title').style.color = '#4caf50'; }
         else if (winners.length > 0) { document.getElementById('result-title').textContent = 'You lost this hand'; document.getElementById('result-title').style.color = '#ef5350'; }
         else { document.getElementById('result-title').textContent = 'Hand Complete'; document.getElementById('result-title').style.color = '#c9a84c'; }
-        let html = '';
-        if (state.results.showdown) {
-          state.results.showdown.results.forEach(r => {
-            const won = payouts[r.id] && payouts[r.id] > 0;
-            const winSpan = won ? '<span class="sdw">+$' + payouts[r.id] + '</span>' : '';
-            const rPlayer = state.players.find(p => p.id === r.id);
-            const rName = rPlayer ? rPlayer.displayName : r.id;
-            html += '<div class="sd-row ' + (won ? 'win' : '') + '"><span>' + escapeHtml(rName) + '</span><span class="sdh">' + (r.description || 'High Card') + '</span>' + winSpan + '</div>';
-          });
-        }
-        document.getElementById('result-details').innerHTML = html;
+        document.getElementById('result-details').innerHTML = buildShowdownRowsHtml(state.results.showdown, payouts, state.players);
         document.getElementById('toggle-reset').checked = state.resetBalanceEachHand || false;
         if (!homeVisible) { if (youWon) { swin(); playVictoryEffect(); } else slose(); }
       } else { overlay.classList.add('hidden'); }
@@ -4262,6 +4292,18 @@
       document.getElementById('rank-results-xp-text').textContent = rank.nextThreshold != null
         ? totalXp + ' / ' + rank.nextThreshold + ' XP to ' + rank.nextLabel
         : totalXp + ' XP - top rank reached';
+
+      // Embedded here (rather than relying on #result-overlay, which ranked
+      // hands never show - see updateGameState) so "who had what, who won"
+      // stays visible for the whole time this screen is up prompting
+      // Continue/Play Again/Analyze, instead of being hidden behind it.
+      // lastGameState reflects this exact hand's results already - handComplete
+      // (which triggers this function) is always emitted after the gameState
+      // push carrying them, see the socket.on('handComplete', ...) comment.
+      const rgResults = lastGameState && lastGameState.results;
+      document.getElementById('rank-results-showdown').innerHTML = rgResults
+        ? buildShowdownRowsHtml(rgResults.showdown, rgResults.payouts || {}, lastGameState.players || [])
+        : '';
 
       // A tier change means the "before" and "after" progress fractions
       // belong to two different tiers (they'd look like a nonsensical jump

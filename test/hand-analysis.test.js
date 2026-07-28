@@ -386,6 +386,52 @@ test("buildHandAnalysis: checking down a hand you lose with no bad decisions is 
   assert.equal(analysis.luckTag, "unlucky");
 });
 
+test("buildHandAnalysis: showdownResults reports the actual winner and hand, not just the hero's own best hand", () => {
+  const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
+  game.gameStarted = true;
+  game.dealerIndex = 1;
+  const bot = botId(game);
+
+  // Same fixture as the "unlucky" test above: "You" never improve past
+  // 2h3s (nothing), the bot rivers two pair, aces over kings, and wins
+  // outright. yourBestHandDescription (a real, non-winning "One Pair"-or-
+  // worse hand for a different deal) should never be confused with who
+  // actually won - that's exactly the ambiguity a user reported: the
+  // analyzer's old single "Best Hand" field only ever showed the hero's
+  // own hand, which read as if it were claiming to be the winning hand.
+  dealFixedHand(game, [
+    cIdx(2, "h"), cIdx(3, "s"), // You - never improves
+    cIdx(14, "c"), cIdx(13, "d"), // bot - flops top two pair
+    cIdx(12, "h"), // burn
+    cIdx(14, "h"), cIdx(9, "d"), cIdx(4, "c"), // flop
+    cIdx(12, "d"), // burn
+    cIdx(9, "s"), // turn - bot now has aces and nines
+    cIdx(12, "c"), // burn
+    cIdx(13, "c"), // river - bot ends with two pair, aces over kings
+  ]);
+
+  applyOpponentAction(game, bot, "call");
+  assert.ok(game.applyPlayerAction("You", "check"));
+  cancelPendingBotTimer(game);
+  for (let i = 0; i < 3 && !game.hand.complete; i++) {
+    assert.ok(game.applyPlayerAction("You", "check"));
+    cancelPendingBotTimer(game);
+    if (!game.hand.complete) applyOpponentAction(game, bot, "check");
+  }
+  if (game.stats.handsPlayed === 0) game.handleHandComplete();
+
+  const analysis = buildHandAnalysis(game);
+  assert.ok(analysis.showdownResults, "a hand that reached showdown should carry showdownResults");
+  assert.equal(analysis.showdownResults.length, 2);
+
+  const yourResult = analysis.showdownResults.find((r) => r.id === "You");
+  const botResult = analysis.showdownResults.find((r) => r.id === bot);
+  assert.equal(yourResult.won, false);
+  assert.equal(botResult.won, true, "the bot actually won this pot");
+  assert.match(botResult.description, /two pair/i, "the winner's own description should reflect their real hand, not the hero's");
+  assert.notEqual(botResult.description, analysis.yourBestHandDescription, "the winning hand and the hero's own best hand are different hands here and must not be conflated");
+});
+
 test("buildHandAnalysis: winning a hand that included a real mistake is tagged lucky, not validated as good play", () => {
   const game = new TableGame({ numPlayers: 2, startingStack: 1000, smallBlind: 5, bigBlind: 10 });
   game.gameStarted = true;

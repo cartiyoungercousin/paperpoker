@@ -1455,16 +1455,24 @@ body::before {
 }
 
 /* ===== Rank Results Modal (session/tournament complete) ===== */
+/* Bottom-anchored rather than centered, and a much lighter backdrop than a
+   typical modal scrim - deliberately so it never fully covers the board:
+   community cards sit in the upper/middle portion of the felt, so a panel
+   docked to the bottom of the viewport (with its own capped-height,
+   scrollable showdown list below, rather than letting the whole box grow
+   tall enough to reach back up over the board) leaves the river visible
+   the entire time this screen is prompting Continue/Play Again/Analyze. */
 #rank-results-modal {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.4);
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
+  padding-bottom: 24px;
   z-index: 230
 }
 
@@ -1475,7 +1483,16 @@ body::before {
   padding: 30px 34px;
   max-width: 400px;
   width: 90%;
-  text-align: center
+  max-height: 80vh;
+  overflow-y: auto;
+  text-align: center;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.7)
+}
+
+#rank-results-showdown {
+  margin-bottom: 14px;
+  max-height: 140px;
+  overflow-y: auto
 }
 
 #btn-analyze-hand-ranked {

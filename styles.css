@@ -49,11 +49,19 @@ body::before {
   transition: background 1s ease
 }
 
+/* logo | tabs | auth-actions, in a 3-column grid whose middle column is
+   auto-sized and independently centered (justify-self on #site-nav-tabs) -
+   this is what actually centers the tab group (and therefore Play, its
+   middle tab) regardless of how wide the logo or a logged-in auth cluster
+   are, the same technique an earlier, narrower version of this nav already
+   proved out. minmax(min-content, 1fr) on the side columns keeps each at
+   least as wide as its own content (logo / auth actions only now, both
+   fairly narrow) while still sharing any leftover space evenly. */
 #site-nav {
   flex-shrink: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(min-content, 1fr) auto minmax(min-content, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 20px;
   padding: 14px 32px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
@@ -63,22 +71,8 @@ body::before {
   z-index: 2
 }
 
-/* The left cluster (logo + Learn/Range Trainer) and right cluster
-   (Multiplayer/Rumble/Experimental + nav actions) each sit flush against
-   their own edge of the nav at their natural content width - neither
-   stretches to meet the other. That leaves genuine, unclaimed empty space
-   in the true middle of the nav (its size just varies with how wide each
-   cluster's content is, e.g. logging in widens the right cluster), which is
-   exactly where the absolutely-positioned Play button below lives - so
-   there's nothing for it to ever collide with, regardless of that width. */
-.site-nav-cluster {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  flex-shrink: 0
-}
-
 #site-logo {
+  justify-self: start;
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 1.15rem;
   font-weight: 700;
@@ -88,22 +82,26 @@ body::before {
   flex-shrink: 0
 }
 
-.site-tabs-side {
+/* overflow-x:auto (scrollbar hidden) is a real safety net, not just
+   tightened spacing - if the group is ever too wide for the space left
+   over between the logo and auth columns, it scrolls instead of visually
+   breaking, so overlap stays structurally impossible even if more tabs are
+   added later. */
+#site-nav-tabs {
+  justify-self: center;
   display: flex;
-  gap: 8px
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none
 }
-
-/* Its center is mathematically #site-nav's own center (and, since #site-nav
-   spans the full page width with symmetric padding, the page's true
-   center) no matter what width either cluster ends up being. */
-.site-tab-pivot {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%)
+#site-nav-tabs::-webkit-scrollbar {
+  display: none
 }
 
 .site-tab {
+  flex-shrink: 0;
   font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
   font-weight: 600;
@@ -130,9 +128,24 @@ body::before {
 }
 
 #site-nav-actions {
+  justify-self: end;
   display: flex;
+  align-items: center;
   gap: 8px;
   flex-shrink: 0
+}
+
+@media (max-width: 1400px) {
+  #site-nav {
+    gap: 12px;
+    padding: 14px 18px
+  }
+  #site-nav-tabs {
+    gap: 4px
+  }
+  .site-tab {
+    padding: 8px 10px
+  }
 }
 
 .site-page {
@@ -168,19 +181,56 @@ body::before {
 }
 
 /* A second layer that stays constant across every difficulty color, unlike
-   #home-bg's own gradient above it - a faint suit watermark plus a fine grid,
-   same texture language already used on the table felt/rail. */
+   #home-bg's own gradient above it - a faint suit watermark, a fine grid,
+   a fractal-noise grain, and a few soft diagonal veins, together reading as
+   a slab of polished dark marble rather than flat black. Oversized (20px
+   past every edge) and mouse-parallax-shifted via --parallax-x/-y (set from
+   JS, see setupHomeBgMouseLight) so a small shift never reveals an empty
+   edge. */
 #home-bg::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  width: calc(100% + 40px);
+  height: calc(100% + 40px);
+  background-image:
+    repeating-linear-gradient(0deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
+    repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
+    linear-gradient(124deg, transparent 0%, transparent 37%, rgba(255, 255, 255, 0.05) 38.5%, rgba(255, 255, 255, 0.02) 40%, transparent 41.5%, transparent 100%),
+    linear-gradient(38deg, transparent 0%, transparent 56%, rgba(255, 255, 255, 0.04) 57.5%, rgba(255, 255, 255, 0.018) 59%, transparent 61%, transparent 100%),
+    linear-gradient(162deg, transparent 0%, transparent 21%, rgba(255, 255, 255, 0.035) 22.5%, transparent 24%, transparent 100%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.012 0.04' numOctaves='3' seed='7'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Ctext x='14' y='46' font-size='30' fill='white' fill-opacity='0.022'%3E%E2%99%A0%3C/text%3E%3Ctext x='96' y='96' font-size='30' fill='white' fill-opacity='0.018'%3E%E2%99%A5%3C/text%3E%3Ctext x='36' y='138' font-size='30' fill='white' fill-opacity='0.018'%3E%E2%99%A6%3C/text%3E%3Ctext x='116' y='34' font-size='30' fill='white' fill-opacity='0.022'%3E%E2%99%A3%3C/text%3E%3C/svg%3E");
+  transform: translate(var(--parallax-x, 0px), var(--parallax-y, 0px));
+  transition: transform 0.2s ease-out
+}
+
+/* Light reflecting off the marble as if the cursor were the light source -
+   a tight bright glint (a specular catch on the polished stone) plus a
+   wider, dimmer ambient bounce, both in soft-light rather than screen so
+   they interact with the marble's own veining/grain (brighter where the
+   stone's already light, muted where it's dark) instead of just uniformly
+   brightening a circle. Only visible once the mouse has actually moved
+   over it (.mouse-active), so it doesn't show as a stray highlight at
+   50%/50% before any interaction. */
+#home-bg::after {
   content: '';
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background-image:
-    repeating-linear-gradient(0deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
-    repeating-linear-gradient(90deg, transparent, transparent 38px, rgba(255, 255, 255, 0.012) 38px, rgba(255, 255, 255, 0.012) 39px),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Ctext x='14' y='46' font-size='30' fill='white' fill-opacity='0.022'%3E%E2%99%A0%3C/text%3E%3Ctext x='96' y='96' font-size='30' fill='white' fill-opacity='0.018'%3E%E2%99%A5%3C/text%3E%3Ctext x='36' y='138' font-size='30' fill='white' fill-opacity='0.018'%3E%E2%99%A6%3C/text%3E%3Ctext x='116' y='34' font-size='30' fill='white' fill-opacity='0.022'%3E%E2%99%A3%3C/text%3E%3C/svg%3E")
+  background:
+    radial-gradient(circle 55px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.4), transparent 70%),
+    radial-gradient(circle 210px at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255, 255, 255, 0.11), transparent 75%);
+  mix-blend-mode: soft-light;
+  opacity: 0;
+  transition: opacity 0.4s ease
+}
+
+#home-bg.mouse-active::after {
+  opacity: 1
 }
 
 #site-shell[data-diff="easy"] {
@@ -318,6 +368,65 @@ body::before {
   flex: 1
 }
 
+#home-rank-hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: background 0.15s ease
+}
+
+#home-rank-hero:hover,
+#home-rank-hero:focus-visible {
+  background: rgba(255, 255, 255, 0.04)
+}
+
+#home-rank-hero-badge {
+  flex-shrink: 0;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+#home-rank-hero-info {
+  flex: 1;
+  min-width: 0
+}
+
+#home-rank-hero-label {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.05rem;
+  color: #e8e4dc;
+  margin-bottom: 6px
+}
+
+#home-rank-hero-xp-bar-bg {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden
+}
+
+#home-rank-hero-xp-bar-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #a8863a, #c9a84c);
+  transition: width 0.6s ease
+}
+
+#home-rank-hero-xp-text {
+  margin-top: 6px;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4)
+}
+
 #difficulty-label {
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -439,6 +548,13 @@ body::before {
   transition: all 0.2s;
   text-transform: uppercase;
   width: 100%
+}
+
+.primary-action-btn:disabled {
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.3) !important;
+  cursor: not-allowed;
+  box-shadow: none !important
 }
 
 .unranked-btn {
@@ -610,11 +726,114 @@ body::before {
   color: #000
 }
 
+/* ===== Info icon (small "i" hover/focus tooltip) - no existing tooltip
+   component in this codebase, so this is the first one, meant to be
+   reusable anywhere a short explanation is useful. Pure CSS show/hide
+   (:hover/:focus-within), no JS needed. ===== */
+.info-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  margin-left: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.55);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.62rem;
+  font-style: italic;
+  font-weight: 700;
+  cursor: help;
+  vertical-align: middle
+}
+
+.info-icon:hover,
+.info-icon:focus-visible {
+  border-color: rgba(201, 168, 76, 0.6);
+  color: #d9bb63;
+  outline: none
+}
+
+.info-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(13, 13, 26, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 0.68rem;
+  font-weight: 400;
+  font-style: normal;
+  line-height: 1.5;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 400
+}
+
+.info-icon:hover .info-tooltip,
+.info-icon:focus-visible .info-tooltip,
+.info-icon:focus-within .info-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0)
+}
+
+/* The header chip's info icon sits right at the top of the viewport and
+   near the right edge - opening upward/centered (the default above) would
+   push the tooltip off the top of the screen and/or off the right edge.
+   Open downward instead, anchored to the icon's right edge. */
+#auth-user-chip .info-tooltip {
+  bottom: auto;
+  top: calc(100% + 8px);
+  left: auto;
+  right: -8px;
+  transform: translateY(-4px)
+}
+
+#auth-user-chip .info-icon:hover .info-tooltip,
+#auth-user-chip .info-icon:focus-visible .info-tooltip,
+#auth-user-chip .info-icon:focus-within .info-tooltip {
+  transform: translateY(0)
+}
+
 .exp-box-tag {
   font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.5px;
   opacity: 0.75
+}
+
+.exp-box.locked {
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+  opacity: 0.55
+}
+
+.exp-box-lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #e8e4dc;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-align: center
 }
 
 /* ===== Experimental Bots page ===== */
@@ -814,6 +1033,31 @@ body::before {
   line-height: 1.5
 }
 
+#signup-legal-agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
+  margin: 6px 0 14px;
+  cursor: pointer;
+  text-align: left
+}
+
+#signup-legal-agree-row input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  accent-color: #c9a84c;
+  cursor: pointer
+}
+
+#signup-legal-agree-row a {
+  color: rgba(201, 168, 76, 0.85)
+}
+
 .auth-submit {
   font-family: 'Inter', sans-serif;
   font-size: 0.8rem;
@@ -887,15 +1131,15 @@ body::before {
   justify-content: center;
   gap: 22px;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto
 }
 
 .play-side-column {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  width: 250px;
+  gap: 20px;
+  width: 290px;
   flex-shrink: 0;
   margin-top: 26px
 }
@@ -906,28 +1150,28 @@ body::before {
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
-  padding: 18px;
+  padding: 24px;
   text-align: left
 }
 
 .play-side-panel h3 {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1rem;
+  font-size: 1.15rem;
   font-weight: 700;
   color: #e8e4dc;
   text-align: center;
-  margin-bottom: 12px
+  margin-bottom: 14px
 }
 
 #play-friends-hint {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.45);
-  line-height: 1.5;
+  line-height: 1.55;
   text-align: center;
-  margin-bottom: 16px
+  margin-bottom: 18px
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1400px) {
   #play-layout {
     flex-direction: column;
     align-items: center
@@ -963,9 +1207,9 @@ body::before {
 }
 
 .home-standalone-info-box li {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.55);
-  line-height: 1.5;
+  line-height: 1.6;
   padding-left: 14px;
   position: relative
 }
@@ -978,9 +1222,9 @@ body::before {
 }
 
 .home-standalone-info-box p {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.55);
-  line-height: 1.55;
+  line-height: 1.6;
   margin-bottom: 14px
 }
 
@@ -1075,12 +1319,23 @@ body::before {
   padding: 8px 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05)
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s
+}
+
+.lb-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15)
 }
 
 .lb-row.lb-you {
   background: rgba(201, 168, 76, 0.1);
   border-color: rgba(201, 168, 76, 0.35)
+}
+
+.lb-row.lb-you:hover {
+  background: rgba(201, 168, 76, 0.16)
 }
 
 .lb-rank {
@@ -1232,6 +1487,10 @@ body::before {
   max-width: 400px;
   width: 90%;
   text-align: center
+}
+
+#btn-analyze-hand-ranked {
+  margin-top: 10px
 }
 
 #rank-results-title {
@@ -1467,8 +1726,333 @@ body::before {
   color: #c9a84c
 }
 
-#profile-content #btn-open-customize {
+#profile-content #btn-open-delete-account {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  background: none;
+  border: none;
+  color: rgba(239, 83, 80, 0.55);
+  font-size: 0.68rem;
+  text-decoration: underline;
+  cursor: pointer;
+  text-align: center
+}
+
+/* ===== Rank Ladder modal - all 16 RANK_TIERS, opened from home-rank-hero.
+   #rank-ladder-list is deliberately scrollable-but-scrollbar-less (both
+   vendor hiding rules below), so the "climb the ladder" feel doesn't come
+   with a bare OS scrollbar track cutting across it. ===== */
+#rank-ladder-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 220
+}
+
+#rank-ladder-content {
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 26px 30px 30px;
+  max-width: 420px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  max-height: 86vh
+}
+
+#rank-ladder-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.2rem;
+  color: #e8e4dc;
+  margin-bottom: 6px
+}
+
+#rank-ladder-subtitle {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 16px
+}
+
+#rank-ladder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding-right: 2px;
+  margin-bottom: 16px;
+  scrollbar-width: none /* Firefox */
+}
+
+#rank-ladder-list::-webkit-scrollbar {
+  display: none /* Chrome/Safari/Edge */
+}
+
+.rank-ladder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.02);
+  opacity: 0.45;
+  flex-shrink: 0
+}
+
+.rank-ladder-row-reached {
+  opacity: 1
+}
+
+.rank-ladder-row-current {
+  border-color: rgba(201, 168, 76, 0.5);
+  background: rgba(201, 168, 76, 0.08);
+  box-shadow: 0 0 0 1px rgba(201, 168, 76, 0.2)
+}
+
+.rank-ladder-row-badge {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+.rank-ladder-row-info {
+  flex: 1;
+  min-width: 0
+}
+
+.rank-ladder-row-label {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.9rem;
+  color: #e8e4dc
+}
+
+.rank-ladder-row-threshold {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 2px
+}
+
+.rank-ladder-row-you {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #c9a84c;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  border-radius: 20px;
+  padding: 4px 10px
+}
+
+#profile-content #btn-open-delete-account:hover {
+  color: rgba(239, 83, 80, 0.85)
+}
+
+/* ===== Public Profile Modal (any leaderboard row) - same shell as
+   #profile-modal above, reusing .profile-stat/.profile-stat-label/
+   .profile-stat-value for the grid, just no coins row and no account
+   actions since this is a read-only view of someone else's account. ===== */
+#public-profile-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 220
+}
+
+#public-profile-content {
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 26px 30px 30px;
+  max-width: 420px;
+  width: 90%
+}
+
+#public-profile-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px
+}
+
+#public-profile-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #e8e4dc
+}
+
+#public-profile-rank-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 500
+}
+
+#public-profile-xp-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px
+}
+
+#public-profile-xp-bar-bg {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden
+}
+
+#public-profile-xp-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #a8863a, #c9a84c);
+  border-radius: 4px;
+  transition: width 0.6s ease
+}
+
+#public-profile-xp-text {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap
+}
+
+#public-profile-scope-hint {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+  margin-bottom: 18px;
+  margin-top: 8px
+}
+
+#public-profile-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px
+}
+
+/* ===== Delete Account Modal ===== */
+#delete-account-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 230
+}
+
+#delete-account-content {
+  background: #111;
+  border: 1px solid rgba(239, 83, 80, 0.2);
+  border-radius: 14px;
+  padding: 26px 30px 30px;
+  max-width: 420px;
+  width: 90%
+}
+
+#delete-account-content h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  margin-bottom: 12px
+}
+
+#delete-account-warning {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.7);
   margin-bottom: 10px
+}
+
+#delete-account-loss-list {
+  list-style: none;
+  margin: 0 0 20px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px
+}
+
+#delete-account-loss-list li {
+  font-size: 0.78rem;
+  color: #f29e9c;
+  padding-left: 14px;
+  position: relative
+}
+
+#delete-account-loss-list li::before {
+  content: '-';
+  position: absolute;
+  left: 0
+}
+
+#delete-account-agree-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.5;
+  margin: 12px 0 16px;
+  cursor: pointer;
+  text-align: left
+}
+
+#delete-account-agree-row input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 1px;
+  accent-color: #ef5350;
+  cursor: pointer
+}
+
+#btn-confirm-delete-account {
+  width: 100%;
+  background: #ef5350;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 11px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: background 0.2s
+}
+
+#btn-confirm-delete-account:hover {
+  background: #d64541
+}
+
+#btn-confirm-delete-account:disabled {
+  opacity: 0.6;
+  cursor: not-allowed
 }
 
 /* ===== Customize Modal (cosmetics shop) ===== */
@@ -1490,10 +2074,44 @@ body::before {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
   padding: 26px 30px 30px;
-  max-width: 460px;
-  width: 90%;
+  max-width: 720px;
+  width: 92%;
   max-height: 85vh;
   overflow-y: auto
+}
+
+#customize-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 14px
+}
+
+.customize-tab {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  padding: 7px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.2s
+}
+
+.customize-tab:hover {
+  color: rgba(255, 255, 255, 0.7);
+  border-color: rgba(255, 255, 255, 0.2)
+}
+
+.customize-tab.active {
+  background: rgba(201, 168, 76, 0.16);
+  border-color: rgba(201, 168, 76, 0.5);
+  color: #d9bb63
 }
 
 #customize-content h2 {
@@ -1619,6 +2237,54 @@ body::before {
   background: linear-gradient(135deg, #ff6b6b 0%, #ffd166 25%, #06d6a0 50%, #4d96ff 75%, #b28dff 100%);
   border: 2px solid #1a1a1a
 }
+.customize-swatch[data-cardback="aurora"] .customize-swatch-card {
+  background: linear-gradient(160deg, #0a2e2a 0%, #114a3e 30%, #1f9e7a 55%, #3ad6c2 75%, #8f5fd6 100%);
+  border: 2px solid #06110f
+}
+.customize-swatch[data-cardback="celestial"] .customize-swatch-card {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.9) 0.5px, transparent 1.2px) 0 0/14px 14px,
+    radial-gradient(circle at 60% 60%, rgba(255, 255, 255, 0.7) 0.5px, transparent 1.2px) 4px 6px/18px 18px,
+    radial-gradient(ellipse at 40% 30%, #241a52 0%, #150f38 55%, #06041a 100%);
+  border: 2px solid #04030f
+}
+.customize-swatch[data-cardback="onyx"] .customize-swatch-card {
+  background: radial-gradient(ellipse at 35% 25%, #4a4a4a 0%, #232323 45%, #0a0a0a 100%);
+  border: 2px solid #000
+}
+.customize-swatch[data-cardback="topaz"] .customize-swatch-card {
+  background: radial-gradient(ellipse at 35% 30%, #ffc266 0%, #d4881f 45%, #7a4a10 100%);
+  border: 2px solid #3d2408
+}
+.customize-swatch[data-cardback="opal"] .customize-swatch-card {
+  background: linear-gradient(135deg, #f2e6ff 0%, #d4f1f4 25%, #ffe0f0 50%, #e0f4e0 75%, #fff4d4 100%);
+  border: 2px solid #2a2a2a
+}
+.customize-swatch[data-cardback="platinum"] .customize-swatch-card {
+  background: radial-gradient(ellipse at 35% 25%, #eef0f4 0%, #b8bcc4 45%, #767a82 100%);
+  border: 2px solid #3a3d42
+}
+.customize-swatch[data-cardback="nebula"] .customize-swatch-card {
+  background:
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.7) 0.5px, transparent 1.2px) 0 0/16px 16px,
+    radial-gradient(ellipse at 30% 30%, #7a4cc4 0%, #3d2266 45%, #170c33 75%, #08040f 100%);
+  border: 2px solid #05030a
+}
+.customize-swatch[data-felt="sapphireNight"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #16305c 0%, #0e2246 30%, #091834 55%, #050f22 100%)
+}
+.customize-swatch[data-felt="amber"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b8802a 0%, #8f611f 30%, #6b4816 55%, #4a3010 100%)
+}
+.customize-swatch[data-felt="forest"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #1a4a2a 0%, #123a20 30%, #0c2c18 55%, #071c10 100%)
+}
+.customize-swatch[data-felt="slate"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #4a5a6a 0%, #384552 30%, #2a343e 55%, #1c232a 100%)
+}
+.customize-swatch[data-felt="magenta"] .customize-swatch-felt {
+  background: radial-gradient(ellipse at 30% 40%, #a8286a 0%, #821d52 30%, #64163f 55%, #470f2d 100%)
+}
 
 .customize-item-name {
   font-size: 0.68rem;
@@ -1637,8 +2303,267 @@ body::before {
   font-weight: 600
 }
 
+.customize-locked-label {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 600;
+  text-align: center
+}
+
+.customize-item-locked {
+  opacity: 0.75
+}
+
 #customize-content #btn-close-customize {
   margin-top: 6px
+}
+
+/* ===== Shop preview swatches: table-theme pattern (on a neutral green
+   felt swatch, independent of feltColor), ripple color, name flair, and
+   victory effect - same "what you see is what you get" spirit as the
+   card-back/felt swatches above. ===== */
+.customize-swatch-theme {
+  width: 60px;
+  height: 44px;
+  border-radius: 22px/16px;
+  background: radial-gradient(ellipse at 30% 40%, #1f7a42 0%, #155d30 30%, #0f4d2b 55%, #0a3d22 100%);
+  position: relative;
+  overflow: hidden
+}
+.customize-swatch-theme::after {
+  content: '';
+  position: absolute;
+  inset: 0
+}
+.customize-swatch[data-theme="herringbone"] .customize-swatch-theme::after {
+  opacity: 0.22;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.2) 0 3px, transparent 3px 6px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.2) 0 3px, transparent 3px 6px);
+  background-size: 12px 12px
+}
+.customize-swatch[data-theme="diamond"] .customize-swatch-theme::after {
+  opacity: 0.2;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.25) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.25) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.25) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.25) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px
+}
+.customize-swatch[data-theme="leather"] .customize-swatch-theme::after {
+  opacity: 0.2;
+  background-image:
+    radial-gradient(circle at 30% 30%, rgba(0, 0, 0, 0.4) 0%, transparent 60%),
+    radial-gradient(circle at 70% 70%, rgba(0, 0, 0, 0.4) 0%, transparent 60%);
+  background-size: 20px 20px
+}
+.customize-swatch[data-theme="starlight"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.9) 1px, transparent 1.5px);
+  background-size: 14px 14px
+}
+.customize-swatch[data-theme="royalCrest"] .customize-swatch-theme::after {
+  opacity: 0.3;
+  background-image: radial-gradient(circle at 50% 50%, rgba(201, 168, 76, 0.6) 0%, transparent 70%);
+  background-size: 44px 44px
+}
+.customize-swatch[data-theme="marble"] .customize-swatch-theme::after {
+  opacity: 0.28;
+  background-image:
+    linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.5) 41%, rgba(255, 255, 255, 0.5) 42%, transparent 43%),
+    linear-gradient(70deg, transparent 60%, rgba(255, 255, 255, 0.35) 61%, rgba(255, 255, 255, 0.35) 62%, transparent 63%)
+}
+.customize-swatch[data-theme="mahogany"] .customize-swatch-theme::after {
+  opacity: 0.3;
+  background-image: repeating-linear-gradient(94deg, rgba(120, 70, 30, 0.5) 0 2px, transparent 2px 8px)
+}
+/* Tournament-exclusive trophy felts share one "medal rays" sunburst motif
+   (distinct from the weave/diamond/leather/dot patterns above), each tinted
+   to its own tier's accent color - see the matching nameFlair veteran
+   colors above for the same tier->color mapping. */
+.customize-swatch[data-theme="localTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(180, 131, 90, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="stateTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(184, 194, 204, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="naTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(201, 168, 76, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="worldTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(156, 106, 222, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="highRollersTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(96, 205, 240, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="celebrityTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(230, 83, 156, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+.customize-swatch[data-theme="undergroundTrophy"] .customize-swatch-theme::after {
+  opacity: 0.35;
+  background-image: repeating-conic-gradient(from 0deg, rgba(214, 62, 62, 0.55) 0deg 8deg, transparent 8deg 20deg)
+}
+
+.customize-swatch-ripple {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.12)
+}
+.customize-swatch[data-ripple="gold"] .customize-swatch-ripple { background: #c9a84c; box-shadow: 0 0 0 6px rgba(201, 168, 76, 0.18) }
+.customize-swatch[data-ripple="crimson"] .customize-swatch-ripple { background: #d34242; box-shadow: 0 0 0 6px rgba(211, 66, 66, 0.18) }
+.customize-swatch[data-ripple="azure"] .customize-swatch-ripple { background: #42a5f5; box-shadow: 0 0 0 6px rgba(66, 165, 245, 0.18) }
+.customize-swatch[data-ripple="emerald"] .customize-swatch-ripple { background: #4caf50; box-shadow: 0 0 0 6px rgba(76, 175, 80, 0.18) }
+.customize-swatch[data-ripple="violet"] .customize-swatch-ripple { background: #9c27b0; box-shadow: 0 0 0 6px rgba(156, 39, 176, 0.18) }
+.customize-swatch[data-ripple="silver"] .customize-swatch-ripple { background: #c8c8d0; box-shadow: 0 0 0 6px rgba(200, 200, 210, 0.18) }
+.customize-swatch[data-ripple="coral"] .customize-swatch-ripple { background: #ff7f6b; box-shadow: 0 0 0 6px rgba(255, 127, 107, 0.18) }
+.customize-swatch[data-ripple="amethyst"] .customize-swatch-ripple { background: #9966cc; box-shadow: 0 0 0 6px rgba(153, 102, 204, 0.18) }
+.customize-swatch[data-ripple="rainbow"] .customize-swatch-ripple {
+  background: conic-gradient(#ff5252, #ffca28, #66bb6a, #42a5f5, #ab47bc, #ff5252);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.12)
+}
+
+/* A "Name" placeholder recolored the same way the real thing is (see
+   .name-flair below) - not a colored pill anymore, so the shop preview
+   actually matches what equipping it does to your real display name. */
+.customize-swatch-flair {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.5)
+}
+.customize-swatch-flair[data-flair="sapphire"] { color: #7fb2f7 }
+.customize-swatch-flair[data-flair="ember"] { color: #ff8a65 }
+.customize-swatch-flair[data-flair="silver"] { color: #cfd3da }
+.customize-swatch-flair[data-flair="gold"] { color: #d9bb63 }
+.customize-swatch-flair[data-flair="addict"] { color: #ce93d8 }
+.customize-swatch-flair[data-flair="star"] { color: #64b5f6 }
+.customize-swatch-flair[data-flair="jade"] { color: #81c995 }
+.customize-swatch-flair[data-flair="crimson"] { color: #e57373 }
+
+.customize-swatch-effect {
+  font-size: 1.8rem;
+  line-height: 1
+}
+
+/* ===== Equipped name flair - recolors the display name itself (header
+   chip, profile modal, in-game "You" seat), rather than appending a
+   separate colored label next to it. Solid color for the simple flairs;
+   Legend and every tournament-exclusive veteran flair get an animated
+   multi-tone gradient instead, achieved by clipping the gradient to the
+   text itself (background-clip:text) so the name's own letters shimmer.
+   Tournament flairs are each tinted toward their own tier's accent color
+   (see .tournament-tier-bar[data-tier-key=...] in the Tournament section),
+   so the reward visually ties back to what earned it. Same color mapping
+   as .customize-swatch-flair above, so the shop preview matches exactly. ===== */
+.name-flair {
+  font-weight: 700
+}
+.name-flair[data-flair="sapphire"] { color: #7fb2f7 }
+.name-flair[data-flair="ember"] { color: #ff8a65 }
+.name-flair[data-flair="silver"] { color: #cfd3da }
+.name-flair[data-flair="gold"] { color: #d9bb63 }
+.name-flair[data-flair="addict"] { color: #ce93d8 }
+.name-flair[data-flair="star"] { color: #64b5f6 }
+.name-flair[data-flair="jade"] { color: #81c995 }
+.name-flair[data-flair="crimson"] { color: #e57373 }
+
+/* Each gradient flair is ONE rule shared by both the shop-preview swatch
+   and the real name, with background-clip/color/background/animation all
+   declared together - splitting background-clip:text into a separate rule
+   from the background shorthand doesn't work (the background shorthand
+   resets background-clip to its initial value wherever it's set, silently
+   clobbering an earlier background-clip:text declaration even though that
+   rule comes first in source order - equal-specificity rules on the same
+   element resolve per property, not as whole rule blocks). This was a real
+   bug: every tournament-exclusive flair rendered as an invisible-text solid
+   block in the shop instead of shimmering colored text. */
+.name-flair[data-flair="legend"], .customize-swatch-flair[data-flair="legend"] {
+  background: linear-gradient(90deg, #ffd166, #b28dff, #ffd166);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 3s linear infinite
+}
+.name-flair[data-flair="localLegend"], .customize-swatch-flair[data-flair="localLegend"] {
+  background: linear-gradient(90deg, #b4835a, #ffcd8c, #b4835a);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 3s linear infinite
+}
+.name-flair[data-flair="stateChampion"], .customize-swatch-flair[data-flair="stateChampion"] {
+  background: linear-gradient(90deg, #96a5b4, #f5faff, #96a5b4);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 3s linear infinite
+}
+.name-flair[data-flair="nationalHero"], .customize-swatch-flair[data-flair="nationalHero"] {
+  background: linear-gradient(90deg, #c9a84c, #ff6464, #c9a84c);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 2.6s linear infinite
+}
+.name-flair[data-flair="worldChampion"], .customize-swatch-flair[data-flair="worldChampion"] {
+  background: linear-gradient(90deg, #ffd166, #9c6ade, #4d96ff, #ffd166);
+  background-size: 320% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 2.8s linear infinite
+}
+.name-flair[data-flair="highRoller"], .customize-swatch-flair[data-flair="highRoller"] {
+  background: linear-gradient(90deg, #60cdf0, #d2f5ff, #60cdf0);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 2.4s linear infinite
+}
+.name-flair[data-flair="aLister"], .customize-swatch-flair[data-flair="aLister"] {
+  background: linear-gradient(90deg, #e6539c, #ffbee1, #e6539c);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 2.6s linear infinite
+}
+.name-flair[data-flair="undergroundLegend"], .customize-swatch-flair[data-flair="undergroundLegend"] {
+  background: linear-gradient(90deg, #d63e3e, #ff8a8a, #d63e3e);
+  background-size: 220% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: flair-shimmer 2s linear infinite, flair-pulse-glow-text 2s ease-in-out infinite
+}
+
+@keyframes flair-shimmer {
+  to { background-position: 220% center }
+}
+/* Underground Legend's pulse, adapted from a box-shadow (which only works
+   on a boxed element) to a text-shadow (which works on inline text). */
+@keyframes flair-pulse-glow-text {
+  0%, 100% { text-shadow: 0 0 3px rgba(214, 62, 62, 0.3) }
+  50% { text-shadow: 0 0 10px rgba(214, 62, 62, 0.95) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .customize-swatch-flair,
+  .name-flair {
+    animation: none !important
+  }
 }
 
 #room-modal {
@@ -2481,7 +3406,8 @@ body::before {
   transform: translate(-50%, -50%);
   display: flex;
   gap: 12px;
-  z-index: 3
+  z-index: 3;
+  perspective: 900px
 }
 
 .bc {
@@ -2493,6 +3419,46 @@ body::before {
 .bc.empty {
   background: rgba(255, 255, 255, 0.03);
   border: 1.5px dashed rgba(255, 255, 255, 0.05)
+}
+
+/* Flop reveal - a real dealer-style turn (face-down to face-up), not an
+   instant pop-in. .bc-flip-inner rotates 180deg on its Y axis; both faces
+   are absolutely stacked with backface-visibility:hidden so only one is
+   ever visible at a time, and the back face is pre-rotated 180deg so it
+   reads right-side-up once the whole thing has turned. */
+.bc-flip {
+  width: 100%;
+  height: 100%
+}
+
+.bc-flip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.5s cubic-bezier(0.3, 0.15, 0.15, 1);
+  transform-style: preserve-3d
+}
+
+.bc-flip.flipped .bc-flip-inner {
+  transform: rotateY(180deg)
+}
+
+.bc-flip-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 6px;
+  overflow: hidden
+}
+
+.bc-flip-face.bc-flip-back {
+  transform: rotateY(180deg)
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-flip-inner {
+    transition: none
+  }
 }
 
 /* ===== Pot Center ===== */
@@ -2695,6 +3661,52 @@ body::before {
   border-radius: 50%;
   opacity: 1;
   animation: particleFall 3s ease-out forwards
+}
+
+/* Victory-effect cosmetics that use an emoji glyph instead of a plain
+   colored dot (Coin Shower, Fireworks, Golden Glow, Royal Fanfare) - same
+   falling/rotating animation, just sized and shaped for a character. */
+.celeb-particle-emoji {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none !important;
+  font-size: 1.5rem;
+  line-height: 1
+}
+
+/* ===== Click ripple (cosmetic, color set by the equipped rippleColor via
+   the <html data-ripple="..."> attribute) - spawned on every button click
+   site-wide, see the delegated click listener. ===== */
+.click-ripple {
+  position: fixed;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  margin-top: -5px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  background: rgba(255, 255, 255, 0.55);
+  animation: click-ripple-expand 0.6s ease-out forwards
+}
+
+@keyframes click-ripple-expand {
+  0% { transform: scale(1); opacity: 0.6 }
+  100% { transform: scale(10); opacity: 0 }
+}
+
+html[data-ripple="gold"] .click-ripple { background: rgba(201, 168, 76, 0.6) }
+html[data-ripple="crimson"] .click-ripple { background: rgba(211, 66, 66, 0.55) }
+html[data-ripple="azure"] .click-ripple { background: rgba(66, 165, 245, 0.55) }
+html[data-ripple="emerald"] .click-ripple { background: rgba(76, 175, 80, 0.55) }
+html[data-ripple="violet"] .click-ripple { background: rgba(156, 39, 176, 0.55) }
+html[data-ripple="silver"] .click-ripple { background: rgba(200, 200, 210, 0.55) }
+html[data-ripple="coral"] .click-ripple { background: rgba(255, 127, 107, 0.55) }
+html[data-ripple="amethyst"] .click-ripple { background: rgba(153, 102, 204, 0.55) }
+html[data-ripple="rainbow"] .click-ripple {
+  background: conic-gradient(#ff5252, #ffca28, #66bb6a, #42a5f5, #ab47bc, #ff5252);
+  opacity: 0.55
 }
 
 @keyframes particleFall {
@@ -3274,6 +4286,398 @@ body::before {
   font-size: 0.8rem;
   text-align: center;
   font-weight: 500
+}
+
+/* ===== Ranked entry intro (plays once, right after "Begin Ranked Game") =====
+   A short "entering the room" moment: a spotlight sweep, a stylized table
+   with an emoji cast already seated, and a walking figure approaching the
+   one open seat, before fading into the real ranked table. All animations
+   live directly on these elements (not toggled via a helper class), so
+   simply removing/adding #ranked-intro-overlay's .hidden class (display:
+   none <-> flex) is enough to replay the whole sequence from the start
+   every time a new ranked session begins - a display:none->visible element
+   always restarts its CSS animations from frame zero. */
+#ranked-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 40%, #2a1f0a 0%, #100b02 55%, #000 100%);
+  opacity: 0;
+  animation: ranked-intro-fade-in 0.6s ease forwards, ranked-intro-fade-out 0.6s ease forwards 2.9s
+}
+
+@keyframes ranked-intro-fade-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes ranked-intro-fade-out {
+  from { opacity: 1 }
+  to { opacity: 0 }
+}
+
+#ranked-intro-spotlight {
+  position: absolute;
+  top: -20%;
+  left: -20%;
+  width: 60%;
+  height: 160%;
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 235, 180, 0.16) 48%, rgba(255, 235, 180, 0.32) 50%, rgba(255, 235, 180, 0.16) 52%, transparent 70%);
+  transform: rotate(12deg) translateX(-120%);
+  animation: ranked-intro-sweep 1.4s ease-in-out forwards
+}
+
+@keyframes ranked-intro-sweep {
+  to { transform: rotate(12deg) translateX(220%) }
+}
+
+#ranked-intro-scene {
+  position: relative;
+  width: 100%;
+  max-width: 560px;
+  height: 300px;
+  opacity: 0;
+  transform: scale(0.92);
+  animation: ranked-intro-scene-in 0.9s ease forwards 0.5s
+}
+
+@keyframes ranked-intro-scene-in {
+  to { opacity: 1; transform: scale(1) }
+}
+
+#ranked-intro-table {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -46%);
+  width: 420px;
+  height: 220px;
+  border-radius: 210px/110px;
+  background: radial-gradient(ellipse at 35% 35%, #1f7a42 0%, #155d30 45%, #0a3d22 100%);
+  border: 9px solid #2a1a0a;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6)
+}
+
+.ranked-intro-seat {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 2.1rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5))
+}
+
+.ranked-intro-tie {
+  font-size: 0.95rem;
+  margin-top: -6px
+}
+
+.ranked-intro-seat-1 { top: -32px; left: 16% }
+.ranked-intro-seat-2 { top: -32px; right: 16% }
+.ranked-intro-seat-3 { bottom: -32px; left: 10% }
+.ranked-intro-seat-4 { top: 38%; right: -30px }
+
+/* Triggered from JS (srankedintro) in sync with each fanfare note - see
+   RANKED_INTRO_NOTES for exactly which seat(s) jump on which note. */
+.ranked-intro-seat.jump {
+  animation: ranked-intro-jump 0.35s ease-out
+}
+
+@keyframes ranked-intro-jump {
+  0%, 100% { transform: translateY(0) }
+  40%, 65% { transform: translateY(-14px) }
+}
+
+#ranked-intro-walker {
+  position: absolute;
+  bottom: -120px;
+  left: 50%;
+  font-size: 2.4rem;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  opacity: 0;
+  animation: ranked-intro-walk 1.6s ease-in-out forwards 1.1s, ranked-intro-bob 0.35s ease-in-out infinite 1.1s
+}
+
+@keyframes ranked-intro-walk {
+  0% { bottom: -120px; opacity: 0 }
+  15% { opacity: 1 }
+  100% { bottom: 42% }
+}
+
+@keyframes ranked-intro-bob {
+  0%, 100% { margin-top: 0 }
+  50% { margin-top: -6px }
+}
+
+#ranked-intro-caption {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  letter-spacing: 1px;
+  color: #e8d9b0;
+  margin-top: 24px;
+  opacity: 0;
+  animation: ranked-intro-caption-in 0.8s ease forwards 0.8s
+}
+
+@keyframes ranked-intro-caption-in {
+  to { opacity: 1 }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #ranked-intro-overlay,
+  #ranked-intro-spotlight,
+  #ranked-intro-scene,
+  #ranked-intro-walker,
+  #ranked-intro-caption,
+  .ranked-intro-seat.jump {
+    animation: none;
+    opacity: 1;
+    transform: none
+  }
+}
+
+/* ===== Per-difficulty "entering the table" intro (Unranked only) - one
+   shared overlay, [data-diff] drives the color/shape/motion so each of the
+   4 standard difficulties reads as genuinely distinct: Easy is a calm green
+   bloom, Medium an amber sweep, Hard a harsh red strobe with a screen
+   shake, Expert a pair of curtains parting. See playDifficultyIntro(). ===== */
+#diff-intro-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, #161616 0%, #060606 60%, #000 100%);
+  opacity: 0;
+  animation: diff-intro-fade-in 0.3s ease forwards, diff-intro-fade-out 0.45s ease forwards 1.75s
+}
+
+@keyframes diff-intro-fade-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes diff-intro-fade-out {
+  from { opacity: 1 }
+  to { opacity: 0 }
+}
+
+#diff-intro-flash {
+  position: absolute;
+  inset: -30%;
+  opacity: 0
+}
+
+#diff-intro-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  opacity: 0;
+  transform: scale(0.85);
+  animation: diff-intro-content-in 0.5s ease forwards 0.15s
+}
+
+@keyframes diff-intro-content-in {
+  to { opacity: 1; transform: scale(1) }
+}
+
+#diff-intro-mascot svg {
+  width: 96px;
+  height: 96px;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.6))
+}
+
+.diff-intro-emoji {
+  display: block;
+  font-size: 4.2rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.6))
+}
+
+#diff-intro-caption {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+  color: #e8e4dc;
+  text-align: center
+}
+
+/* Easy - a calm single green bloom */
+#diff-intro-overlay[data-diff="easy"] #diff-intro-flash {
+  background: radial-gradient(circle, rgba(102, 187, 106, 0.55) 0%, rgba(102, 187, 106, 0.15) 40%, transparent 70%);
+  animation: diff-intro-bloom 0.9s ease forwards 0.05s
+}
+
+@keyframes diff-intro-bloom {
+  0% { opacity: 0; transform: scale(0.5) }
+  40% { opacity: 1; transform: scale(1.05) }
+  100% { opacity: 0; transform: scale(1.3) }
+}
+
+/* Medium - an amber spotlight sweep (same technique as #ranked-intro-spotlight) */
+#diff-intro-overlay[data-diff="medium"] #diff-intro-flash {
+  background: linear-gradient(100deg, transparent 30%, rgba(255, 202, 40, 0.16) 48%, rgba(255, 202, 40, 0.42) 50%, rgba(255, 202, 40, 0.16) 52%, transparent 70%);
+  transform: rotate(8deg) translateX(-140%);
+  opacity: 1;
+  animation: diff-intro-sweep 0.85s ease-in-out forwards 0.05s
+}
+
+@keyframes diff-intro-sweep {
+  to { transform: rotate(8deg) translateX(140%) }
+}
+
+/* Hard - a harsh red double-strobe plus a shake on the mascot/caption */
+#diff-intro-overlay[data-diff="hard"] #diff-intro-flash {
+  background: radial-gradient(circle, rgba(239, 83, 80, 0.6) 0%, rgba(239, 83, 80, 0.1) 45%, transparent 70%);
+  animation: diff-intro-strobe 0.55s steps(1) forwards 0.05s
+}
+
+@keyframes diff-intro-strobe {
+  0% { opacity: 0 }
+  10% { opacity: 1 }
+  25% { opacity: 0.15 }
+  40% { opacity: 0.9 }
+  60% { opacity: 0.1 }
+  100% { opacity: 0 }
+}
+
+#diff-intro-overlay[data-diff="hard"] #diff-intro-content {
+  animation: diff-intro-content-in 0.5s ease forwards 0.15s, diff-intro-shake 0.4s ease-out 0.15s
+}
+
+@keyframes diff-intro-shake {
+  0%, 100% { margin-left: 0 }
+  20% { margin-left: -6px }
+  40% { margin-left: 5px }
+  60% { margin-left: -4px }
+  80% { margin-left: 3px }
+}
+
+/* Expert - a cool silver bloom plus a pair of curtains parting to reveal the scene */
+#diff-intro-overlay[data-diff="expert"] #diff-intro-flash {
+  background: radial-gradient(circle, rgba(220, 220, 255, 0.4) 0%, rgba(220, 220, 255, 0.1) 45%, transparent 70%);
+  animation: diff-intro-bloom 1s ease forwards 0.05s
+}
+
+#diff-intro-overlay[data-diff="expert"]::before,
+#diff-intro-overlay[data-diff="expert"]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 52%;
+  background: #050505;
+  border-color: rgba(220, 220, 255, 0.25);
+  z-index: 2
+}
+
+#diff-intro-overlay[data-diff="expert"]::before {
+  top: 0;
+  border-bottom: 1px solid rgba(220, 220, 255, 0.25);
+  animation: diff-intro-wipe-top 0.7s ease forwards 0.05s
+}
+
+#diff-intro-overlay[data-diff="expert"]::after {
+  bottom: 0;
+  border-top: 1px solid rgba(220, 220, 255, 0.25);
+  animation: diff-intro-wipe-bottom 0.7s ease forwards 0.05s
+}
+
+@keyframes diff-intro-wipe-top {
+  from { transform: translateY(0) }
+  to { transform: translateY(-100%) }
+}
+
+@keyframes diff-intro-wipe-bottom {
+  from { transform: translateY(0) }
+  to { transform: translateY(100%) }
+}
+
+/* Rumble - an electric cyan strobe plus a chaotic multi-axis shake, wilder
+   than Hard's single-axis one to match the "power-ups can hit at any
+   moment" chaos of the mode itself. */
+#diff-intro-overlay[data-diff="rumble"] #diff-intro-flash {
+  background: radial-gradient(circle, rgba(77, 208, 225, 0.6) 0%, rgba(77, 208, 225, 0.12) 45%, transparent 70%);
+  animation: diff-intro-strobe 0.6s steps(1) forwards 0.05s
+}
+
+#diff-intro-overlay[data-diff="rumble"] #diff-intro-content {
+  animation: diff-intro-content-in 0.5s ease forwards 0.15s, diff-intro-rumble-shake 0.65s ease-out 0.15s
+}
+
+@keyframes diff-intro-rumble-shake {
+  0%, 100% { margin-left: 0; margin-top: 0 }
+  15% { margin-left: -6px; margin-top: 3px }
+  30% { margin-left: 7px; margin-top: -4px }
+  45% { margin-left: -7px; margin-top: 2px }
+  60% { margin-left: 5px; margin-top: -3px }
+  75% { margin-left: -3px; margin-top: 2px }
+  90% { margin-left: 2px; margin-top: -1px }
+}
+
+/* Tournament round start - the same parting-curtains technique Expert uses
+   (a literal curtain fits "beginning a round" better than any of the other
+   difficulty flashes), but themed in the Tournament page's own violet
+   accent instead of Expert's cool silver, so it reads as its own mode
+   rather than borrowed Expert theming. */
+#diff-intro-overlay[data-diff="tournament"] #diff-intro-flash {
+  background: radial-gradient(circle, rgba(156, 106, 222, 0.5) 0%, rgba(156, 106, 222, 0.12) 45%, transparent 70%);
+  animation: diff-intro-bloom 1s ease forwards 0.05s
+}
+
+#diff-intro-overlay[data-diff="tournament"]::before,
+#diff-intro-overlay[data-diff="tournament"]::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 52%;
+  background: #0d0812;
+  border-color: rgba(156, 106, 222, 0.35);
+  z-index: 2
+}
+
+#diff-intro-overlay[data-diff="tournament"]::before {
+  top: 0;
+  border-bottom: 1px solid rgba(156, 106, 222, 0.35);
+  animation: diff-intro-wipe-top 0.7s ease forwards 0.05s
+}
+
+#diff-intro-overlay[data-diff="tournament"]::after {
+  bottom: 0;
+  border-top: 1px solid rgba(156, 106, 222, 0.35);
+  animation: diff-intro-wipe-bottom 0.7s ease forwards 0.05s
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #diff-intro-overlay,
+  #diff-intro-flash,
+  #diff-intro-content,
+  #diff-intro-overlay[data-diff="hard"] #diff-intro-content,
+  #diff-intro-overlay[data-diff="rumble"] #diff-intro-content,
+  #diff-intro-overlay[data-diff="expert"]::before,
+  #diff-intro-overlay[data-diff="expert"]::after,
+  #diff-intro-overlay[data-diff="tournament"]::before,
+  #diff-intro-overlay[data-diff="tournament"]::after {
+    animation: none;
+    opacity: 1;
+    transform: none;
+    margin-left: 0;
+    margin-top: 0
+  }
 }
 
 /* ===== Result Overlay ===== */
@@ -3965,6 +5369,119 @@ body::before {
 #app[data-felt="gold"] #table-felt {
   background: radial-gradient(ellipse at 30% 40%, #b89550 0%, #96773d 30%, #7a5f2f 55%, #5c481f 100%)
 }
+#app[data-felt="sapphireNight"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #16305c 0%, #0e2246 30%, #091834 55%, #050f22 100%)
+}
+#app[data-felt="amber"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #b8802a 0%, #8f611f 30%, #6b4816 55%, #4a3010 100%)
+}
+#app[data-felt="forest"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #1a4a2a 0%, #123a20 30%, #0c2c18 55%, #071c10 100%)
+}
+#app[data-felt="slate"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #4a5a6a 0%, #384552 30%, #2a343e 55%, #1c232a 100%)
+}
+#app[data-felt="magenta"] #table-felt {
+  background: radial-gradient(ellipse at 30% 40%, #a8286a 0%, #821d52 30%, #64163f 55%, #470f2d 100%)
+}
+
+/* ===== Cosmetics: table-theme pattern, layered over the felt color above
+   via a ::after overlay (independent of which color is equipped) - "plain"
+   (no pattern) needs no override rule. ===== */
+#table-felt::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0
+}
+#app[data-theme="herringbone"] #table-felt::after {
+  opacity: 0.18;
+  background-image:
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.16) 0 4px, transparent 4px 8px),
+    repeating-linear-gradient(-45deg, rgba(255, 255, 255, 0.16) 0 4px, transparent 4px 8px);
+  background-size: 16px 16px
+}
+#app[data-theme="diamond"] #table-felt::after {
+  opacity: 0.16;
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.2) 75%),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, 0.2) 75%);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px
+}
+#app[data-theme="leather"] #table-felt::after {
+  opacity: 0.16;
+  background-image:
+    radial-gradient(circle at 30% 30%, rgba(0, 0, 0, 0.35) 0%, transparent 60%),
+    radial-gradient(circle at 70% 70%, rgba(0, 0, 0, 0.35) 0%, transparent 60%);
+  background-size: 30px 30px
+}
+#app[data-theme="starlight"] #table-felt::after {
+  opacity: 0.3;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.85) 1px, transparent 1.5px);
+  background-size: 22px 22px
+}
+#app[data-theme="royalCrest"] #table-felt::after {
+  opacity: 0.22;
+  background-image: radial-gradient(circle at 50% 50%, rgba(201, 168, 76, 0.55) 0%, transparent 70%);
+  background-size: 70px 70px
+}
+#app[data-theme="marble"] #table-felt::after {
+  opacity: 0.22;
+  background-image:
+    linear-gradient(115deg, transparent 40%, rgba(255, 255, 255, 0.45) 41%, rgba(255, 255, 255, 0.45) 42%, transparent 43%),
+    linear-gradient(70deg, transparent 60%, rgba(255, 255, 255, 0.3) 61%, rgba(255, 255, 255, 0.3) 62%, transparent 63%);
+  background-size: 160px 160px
+}
+#app[data-theme="mahogany"] #table-felt::after {
+  opacity: 0.24;
+  background-image: repeating-linear-gradient(94deg, rgba(120, 70, 30, 0.45) 0 2px, transparent 2px 10px)
+}
+/* Tournament trophy felts - same "medal rays" sunburst motif as the shop
+   swatch versions above, tinted per tier. */
+#app[data-theme="localTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(180, 131, 90, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="stateTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(184, 194, 204, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="naTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(201, 168, 76, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="worldTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(156, 106, 222, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="highRollersTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(96, 205, 240, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="celebrityTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(230, 83, 156, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
+#app[data-theme="undergroundTrophy"] #table-felt::after {
+  opacity: 0.26;
+  background-image: repeating-conic-gradient(from 0deg, rgba(214, 62, 62, 0.5) 0deg 8deg, transparent 8deg 20deg);
+  background-size: 260px 260px;
+  background-position: center
+}
 
 /* ===== Cosmetics: equipped card back. "classic" (the default diagonal
    stripe on .card-b/.csb above) needs no override rule. ===== */
@@ -3987,7 +5504,6 @@ body::before {
 #app[data-cardback="jewel"] .card-b,
 #app[data-cardback="jewel"] .csb {
   background: radial-gradient(ellipse at 35% 30%, #9c2c5e 0%, #5c1638 55%, #2c0a1e 100%);
-  background-image: none;
   border-color: #1a0512
 }
 #app[data-cardback="suits"] .card-b {
@@ -4005,13 +5521,11 @@ body::before {
 #app[data-cardback="emerald"] .card-b,
 #app[data-cardback="emerald"] .csb {
   background: radial-gradient(ellipse at 35% 30%, #1fa363 0%, #0d6b3f 55%, #04331f 100%);
-  background-image: none;
   border-color: #02190f
 }
 #app[data-cardback="midnight"] .card-b,
 #app[data-cardback="midnight"] .csb {
   background: radial-gradient(ellipse at 35% 30%, #2c3e6b 0%, #16203d 55%, #080b18 100%);
-  background-image: none;
   border-color: #04060c
 }
 #app[data-cardback="royal"] .card-b {
@@ -4029,8 +5543,47 @@ body::before {
 #app[data-cardback="prism"] .card-b,
 #app[data-cardback="prism"] .csb {
   background: linear-gradient(135deg, #ff6b6b 0%, #ffd166 25%, #06d6a0 50%, #4d96ff 75%, #b28dff 100%);
-  background-image: none;
   border-color: #1a1a1a
+}
+#app[data-cardback="aurora"] .card-b,
+#app[data-cardback="aurora"] .csb {
+  background: linear-gradient(160deg, #0a2e2a 0%, #114a3e 30%, #1f9e7a 55%, #3ad6c2 75%, #8f5fd6 100%);
+  border-color: #06110f
+}
+#app[data-cardback="celestial"] .card-b,
+#app[data-cardback="celestial"] .csb {
+  background:
+    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.9) 0.5px, transparent 1.2px) 0 0/14px 14px,
+    radial-gradient(circle at 60% 60%, rgba(255, 255, 255, 0.7) 0.5px, transparent 1.2px) 4px 6px/18px 18px,
+    radial-gradient(ellipse at 40% 30%, #241a52 0%, #150f38 55%, #06041a 100%);
+  border-color: #04030f
+}
+#app[data-cardback="onyx"] .card-b,
+#app[data-cardback="onyx"] .csb {
+  background: radial-gradient(ellipse at 35% 25%, #4a4a4a 0%, #232323 45%, #0a0a0a 100%);
+  border-color: #000
+}
+#app[data-cardback="topaz"] .card-b,
+#app[data-cardback="topaz"] .csb {
+  background: radial-gradient(ellipse at 35% 30%, #ffc266 0%, #d4881f 45%, #7a4a10 100%);
+  border-color: #3d2408
+}
+#app[data-cardback="opal"] .card-b,
+#app[data-cardback="opal"] .csb {
+  background: linear-gradient(135deg, #f2e6ff 0%, #d4f1f4 25%, #ffe0f0 50%, #e0f4e0 75%, #fff4d4 100%);
+  border-color: #2a2a2a
+}
+#app[data-cardback="platinum"] .card-b,
+#app[data-cardback="platinum"] .csb {
+  background: radial-gradient(ellipse at 35% 25%, #eef0f4 0%, #b8bcc4 45%, #767a82 100%);
+  border-color: #3a3d42
+}
+#app[data-cardback="nebula"] .card-b,
+#app[data-cardback="nebula"] .csb {
+  background:
+    radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.7) 0.5px, transparent 1.2px) 0 0/16px 16px,
+    radial-gradient(ellipse at 30% 30%, #7a4cc4 0%, #3d2266 45%, #170c33 75%, #08040f 100%);
+  border-color: #05030a
 }
 
 /* A faint, slowly breathing ambient glow behind the felt - present on every
@@ -5246,4 +6799,1227 @@ body::before {
 @keyframes rumble-spark-twinkle {
   0%, 100% { opacity: 0.2; transform: scale(0.8) }
   50% { opacity: 1; transform: scale(1.3) }
+}
+
+/* ===== Rumble landing page (real content, replaces the old placeholder) ===== */
+#rumble-page-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 720px;
+  width: 100%;
+  padding: 10px 0 40px
+}
+
+#rumble-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 380px
+}
+
+#rumble-hero-tagline {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.88rem;
+  line-height: 1.6;
+  margin: 2px 0 18px
+}
+
+.rumble-btn {
+  background: linear-gradient(135deg, #4dd0e1, #2b96a8);
+  color: #0d0d1a;
+  margin-bottom: 6px
+}
+
+.rumble-btn:hover {
+  background: linear-gradient(135deg, #64ddee, #33abc0);
+  box-shadow: 0 4px 20px rgba(77, 208, 225, 0.35)
+}
+
+#rumble-explainer {
+  width: 100%;
+  margin-top: 34px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06)
+}
+
+.rumble-section-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  text-align: center;
+  margin-bottom: 12px
+}
+
+#rumble-rules-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 30px
+}
+
+#rumble-rules-list li {
+  position: relative;
+  padding-left: 20px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  line-height: 1.6
+}
+
+#rumble-rules-list li::before {
+  content: '♠';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #4dd0e1;
+  opacity: 0.7;
+  font-size: 0.75rem
+}
+
+#rumble-powerups-hint {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.78rem;
+  line-height: 1.6;
+  margin-bottom: 18px
+}
+
+#rumble-powerup-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 14px
+}
+
+.rpu-grid-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px
+}
+
+.rpu-grid-category {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: rgba(255, 255, 255, 0.3);
+  text-align: center
+}
+
+@media (max-width: 640px) {
+  #rumble-powerup-grid {
+    grid-template-columns: 1fr
+  }
+}
+
+/* ===== Rumble power-up card (shared component - the explainer grid above
+   and the in-game secret card below both render the exact same markup/CSS,
+   per the "same card you'll see in-game" requirement) ===== */
+.rpu-card {
+  width: 100%;
+  max-width: 210px;
+  background: linear-gradient(160deg, #16161f, #0d0d14);
+  border: 1px solid rgba(77, 208, 225, 0.25);
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35)
+}
+
+.rpu-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px
+}
+
+.rpu-card-icon {
+  font-size: 1.4rem;
+  line-height: 1;
+  flex-shrink: 0
+}
+
+.rpu-card-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #e8e4dc
+}
+
+.rpu-card-desc {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5)
+}
+
+/* ===== In-game secret power-up panel (visible only to "You" - lives inside
+   #player-area alongside the hole cards/stack, same flex row) ===== */
+#rumble-powerup-panel {
+  flex-shrink: 0
+}
+
+#rumble-powerup-panel .rpu-card {
+  max-width: 220px;
+  padding: 10px 14px;
+  gap: 4px
+}
+
+#rumble-powerup-panel .rpu-card-desc {
+  font-size: 0.68rem;
+  margin-bottom: 2px
+}
+
+#rumble-powerup-panel.rpu-used .rpu-card {
+  opacity: 0.5;
+  border-color: rgba(255, 255, 255, 0.1)
+}
+
+#rumble-powerup-target-hint {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #4dd0e1;
+  margin-bottom: 4px
+}
+
+.rpu-activate-btn {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 7px 0;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  background: linear-gradient(135deg, #4dd0e1, #2b96a8);
+  color: #0d0d1a;
+  transition: all 0.2s
+}
+
+.rpu-activate-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #64ddee, #33abc0);
+  box-shadow: 0 2px 12px rgba(77, 208, 225, 0.35)
+}
+
+.rpu-activate-btn:disabled {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed
+}
+
+/* ===== Header pill (mirrors #hranked's look, cyan instead of gold) ===== */
+#hrumble {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border: 1px solid rgba(77, 208, 225, 0.35);
+  border-radius: 3px;
+  color: #4dd0e1;
+  font-weight: 600
+}
+
+/* ===== Seat states: targetable (choosing an X-Ray Vision/Freeze-Silence
+   target), pulse (a power-up was just activated at this seat), frozen
+   (Freeze/Silence is currently restricting this seat's options) ===== */
+.seat.targetable {
+  cursor: pointer;
+  border-color: #4dd0e1 !important;
+  box-shadow: 0 0 16px rgba(77, 208, 225, 0.5) !important;
+  animation: rpu-target-pulse 1.2s ease-in-out infinite
+}
+
+@keyframes rpu-target-pulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(77, 208, 225, 0.35) }
+  50% { box-shadow: 0 0 20px rgba(77, 208, 225, 0.7) }
+}
+
+.seat.rpu-pulse {
+  animation: rpu-seat-pulse 0.9s ease
+}
+
+@keyframes rpu-seat-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0.7) }
+  70% { box-shadow: 0 0 0 18px rgba(201, 168, 76, 0) }
+  100% { box-shadow: 0 0 0 0 rgba(201, 168, 76, 0) }
+}
+
+.seat.rpu-frozen {
+  border-color: #4dd0e1 !important
+}
+
+.rpu-frozen-badge {
+  position: absolute;
+  top: -11px;
+  right: -8px;
+  background: linear-gradient(135deg, #4dd0e1, #2b96a8);
+  color: #0d0d1a;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+  white-space: nowrap
+}
+
+/* ===== Center-screen power-up reveal - everyone at the table sees this the
+   moment any player (human or bot) activates their power-up. Same restart
+   technique as #ranked-intro-overlay: toggling .hidden (display:none <->
+   flex) always replays the CSS animations below from frame zero. ===== */
+#rumble-reveal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0;
+  /* Held noticeably longer than a typical toast/flourish (~4s total) so
+     everyone actually has time to read who used what on whom before it
+     fades - a quick blip is easy to miss mid-hand. */
+  animation: rpu-reveal-bg-in 0.3s ease forwards, rpu-reveal-bg-out 0.5s ease forwards 3.5s
+}
+
+#rumble-reveal-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.15) 55%, transparent 100%)
+}
+
+@keyframes rpu-reveal-bg-in {
+  from { opacity: 0 }
+  to { opacity: 1 }
+}
+
+@keyframes rpu-reveal-bg-out {
+  from { opacity: 1 }
+  to { opacity: 0 }
+}
+
+#rumble-reveal-card {
+  position: relative;
+  z-index: 1;
+  width: 160px;
+  min-height: 190px;
+  background: linear-gradient(160deg, #1c1c2c, #0d0d1a);
+  border: 2px solid #4dd0e1;
+  border-radius: 14px;
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(77, 208, 225, 0.3);
+  opacity: 0;
+  transform: rotateY(90deg) scale(0.6);
+  animation: rpu-card-flip 0.55s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards 0.15s
+}
+
+@keyframes rpu-card-flip {
+  0% { transform: rotateY(90deg) scale(0.6); opacity: 0 }
+  70% { transform: rotateY(0deg) scale(1.06); opacity: 1 }
+  100% { transform: rotateY(0deg) scale(1); opacity: 1 }
+}
+
+#rpu-reveal-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.5))
+}
+
+#rpu-reveal-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  text-align: center;
+  padding: 0 6px
+}
+
+#rpu-reveal-swap {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px
+}
+
+#rpu-reveal-swap.showing {
+  display: flex
+}
+
+.rpu-swap-card {
+  width: 32px;
+  height: 46px
+}
+
+#rpu-reveal-swap-old {
+  opacity: 1;
+  animation: rpu-swap-out 0.6s ease forwards 0.7s
+}
+
+#rpu-reveal-swap-new {
+  opacity: 0;
+  animation: rpu-swap-in 0.6s ease forwards 1s
+}
+
+#rpu-reveal-swap-arrow {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 1rem;
+  opacity: 0;
+  animation: rpu-reveal-bg-in 0.3s ease forwards 0.8s
+}
+
+@keyframes rpu-swap-out {
+  0% { transform: translateX(0) rotate(0deg); opacity: 1 }
+  100% { transform: translateX(-12px) rotate(-14deg); opacity: 0.15 }
+}
+
+@keyframes rpu-swap-in {
+  0% { transform: translateX(12px) rotate(14deg); opacity: 0 }
+  100% { transform: translateX(0) rotate(0deg); opacity: 1 }
+}
+
+#rpu-reveal-caption {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e8d9b0;
+  text-align: center;
+  padding: 0 20px;
+  opacity: 0;
+  animation: rpu-reveal-bg-in 0.4s ease forwards 0.5s
+}
+
+/* ===== Rumble power-up PRIVATE reveal (activator-only) - a real face-up
+   card popup, click anywhere (or wait 5s) to dismiss. Reuses the public
+   reveal's own fade keyframes and the difficulty-intro's content-in scale
+   keyframe rather than defining new ones. ===== */
+#rpu-private-reveal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+  opacity: 0;
+  animation: rpu-reveal-bg-in 0.25s ease forwards, rpu-reveal-bg-out 0.4s ease forwards 4.6s
+}
+
+#rpu-private-reveal-content {
+  background: linear-gradient(160deg, #1c1c2c, #0d0d1a);
+  border: 2px solid #c9a84c;
+  border-radius: 16px;
+  padding: 26px 30px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(201, 168, 76, 0.25);
+  opacity: 0;
+  transform: scale(0.85);
+  animation: diff-intro-content-in 0.4s ease forwards 0.1s
+}
+
+#rpu-private-reveal-heading {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e8e4dc
+}
+
+#rpu-private-reveal-cards {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  max-width: 320px
+}
+
+#rpu-private-reveal-cards .card {
+  width: 84px;
+  height: 120px
+}
+
+#rpu-private-reveal-arrow {
+  font-size: 1.4rem;
+  color: rgba(255, 255, 255, 0.4)
+}
+
+#rpu-private-reveal-caption {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center
+}
+
+/* ===== Rumble tournament-complete results screen (mirrors #rank-results-modal) ===== */
+#rumble-results-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 230
+}
+
+#rumble-results-content {
+  background: #111;
+  border: 1px solid rgba(77, 208, 225, 0.3);
+  border-radius: 14px;
+  padding: 30px 34px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center
+}
+
+#rumble-results-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  margin-bottom: 20px
+}
+
+#rumble-results-standings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 22px
+}
+
+.rumble-standing-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06)
+}
+
+.rumble-standing-row.you {
+  border-color: rgba(255, 255, 255, 0.25)
+}
+
+.rumble-standing-row.winner {
+  border-color: rgba(77, 208, 225, 0.45);
+  background: rgba(77, 208, 225, 0.08)
+}
+
+.rumble-standing-rank {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.35);
+  width: 22px;
+  flex-shrink: 0;
+  text-align: left
+}
+
+.rumble-standing-name {
+  flex: 1;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #e8e4dc
+}
+
+.rumble-standing-stack {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #c9a84c
+}
+
+/* ===== Tournament page - a violet/prestige accent, distinct from Ranked's
+   gold, Rumble's cyan, and every difficulty's own color. ===== */
+#tournament-page-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 720px;
+  width: 100%;
+  padding: 10px 0 40px
+}
+
+#tournament-select-view,
+#tournament-home-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%
+}
+
+#tournament-multiplayer-note {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.76rem;
+  font-style: italic;
+  max-width: 480px;
+  line-height: 1.6;
+  margin: 2px 0 22px
+}
+
+#tournament-info-box {
+  width: 100%;
+  max-width: 480px;
+  margin-bottom: 30px;
+  padding-top: 26px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06)
+}
+
+#tournament-rules-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px
+}
+
+#tournament-rules-list li {
+  position: relative;
+  padding-left: 20px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.82rem;
+  line-height: 1.6
+}
+
+#tournament-rules-list li::before {
+  content: '♠';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #9c6ade;
+  opacity: 0.75;
+  font-size: 0.75rem
+}
+
+.tournament-btn {
+  background: linear-gradient(135deg, #9c6ade, #7c4dbd);
+  color: #fbf7ff
+}
+
+.tournament-btn:hover {
+  background: linear-gradient(135deg, #ad7ded, #8c5dce);
+  box-shadow: 0 4px 20px rgba(156, 106, 222, 0.35)
+}
+
+/* ===== Tier bars - long horizontal boxes (medal icon left, name/stats
+   middle, Enter right), each with its own layered background wash + a
+   large faded medal watermark for "more detail in the background" without
+   the icon fighting the readable content sitting on top of it. ===== */
+#tournament-tier-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  margin-bottom: 30px
+}
+
+.tournament-tier-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding: 20px 26px;
+  border-radius: 14px;
+  border: 1px solid rgba(156, 106, 222, 0.25);
+  background: linear-gradient(120deg, #17151c 0%, #16161f 55%, #0d0d14 100%);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  position: relative;
+  overflow: hidden
+}
+
+.tournament-tier-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px
+}
+
+.tournament-tier-watermark {
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%) rotate(-10deg);
+  font-size: 6rem;
+  line-height: 1;
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0
+}
+
+/* Rising-prestige tints per tier, echoed in the top accent strip above. */
+.tournament-tier-bar[data-tier-key="local"] {
+  border-color: rgba(180, 131, 90, 0.3)
+}
+.tournament-tier-bar[data-tier-key="local"]::before {
+  background: linear-gradient(90deg, transparent, #b4835a, transparent)
+}
+.tournament-tier-bar[data-tier-key="state"] {
+  border-color: rgba(154, 165, 178, 0.35)
+}
+.tournament-tier-bar[data-tier-key="state"]::before {
+  background: linear-gradient(90deg, transparent, #b8c2cc, transparent)
+}
+.tournament-tier-bar[data-tier-key="na"] {
+  border-color: rgba(201, 168, 76, 0.35)
+}
+.tournament-tier-bar[data-tier-key="na"]::before {
+  background: linear-gradient(90deg, transparent, #c9a84c, transparent)
+}
+.tournament-tier-bar[data-tier-key="worldSeries"] {
+  border-color: rgba(156, 106, 222, 0.5);
+  box-shadow: 0 4px 20px rgba(156, 106, 222, 0.18), 0 4px 16px rgba(0, 0, 0, 0.35)
+}
+.tournament-tier-bar[data-tier-key="worldSeries"]::before {
+  background: linear-gradient(90deg, transparent, #9c6ade, transparent)
+}
+.tournament-tier-bar[data-tier-key="highRollers"] {
+  border-color: rgba(96, 205, 240, 0.45);
+  box-shadow: 0 4px 20px rgba(96, 205, 240, 0.15), 0 4px 16px rgba(0, 0, 0, 0.35)
+}
+.tournament-tier-bar[data-tier-key="highRollers"]::before {
+  background: linear-gradient(90deg, transparent, #60cdf0, transparent)
+}
+.tournament-tier-bar[data-tier-key="celebrityCasual"] {
+  border-color: rgba(230, 83, 156, 0.45);
+  box-shadow: 0 4px 20px rgba(230, 83, 156, 0.15), 0 4px 16px rgba(0, 0, 0, 0.35)
+}
+.tournament-tier-bar[data-tier-key="celebrityCasual"]::before {
+  background: linear-gradient(90deg, transparent, #e6539c, transparent)
+}
+.tournament-tier-bar[data-tier-key="undergroundTables"] {
+  border-color: rgba(214, 62, 62, 0.5);
+  box-shadow: 0 4px 22px rgba(214, 62, 62, 0.2), 0 4px 16px rgba(0, 0, 0, 0.4)
+}
+.tournament-tier-bar[data-tier-key="undergroundTables"]::before {
+  background: linear-gradient(90deg, transparent, #d63e3e, transparent)
+}
+
+.tournament-tier-locked {
+  filter: grayscale(0.6);
+  opacity: 0.75
+}
+
+.tournament-tier-rank-req {
+  color: #c9a3ec
+}
+
+.tournament-tier-bar-icon {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.9rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  z-index: 1
+}
+
+.tournament-tier-bar-info {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: left
+}
+
+.tournament-tier-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  text-align: left
+}
+
+.tournament-tier-stats {
+  display: flex;
+  gap: 16px;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6)
+}
+
+.tournament-enter-btn {
+  flex-shrink: 0;
+  width: auto;
+  min-width: 150px;
+  font-weight: 700;
+  position: relative;
+  z-index: 1
+}
+
+.tournament-enter-btn:not(:disabled) {
+  border-color: rgba(156, 106, 222, 0.4);
+  color: #c9a3ec
+}
+
+@media (max-width: 640px) {
+  .tournament-tier-bar {
+    flex-wrap: wrap
+  }
+  .tournament-enter-btn {
+    width: 100%
+  }
+}
+
+/* ===== Tournament home - a decorative hero + a real connected "path to
+   the trophy" instead of a bare row of boxes, to fill what used to be a
+   pretty barren screen. ===== */
+#tournament-home-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px
+}
+
+#tournament-home-trophy {
+  font-size: 3.2rem;
+  line-height: 1;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 4px 16px rgba(156, 106, 222, 0.35));
+  animation: tournament-trophy-bob 3s ease-in-out infinite
+}
+
+@keyframes tournament-trophy-bob {
+  0%, 100% { transform: translateY(0) }
+  50% { transform: translateY(-6px) }
+}
+
+#tournament-home-tier-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  text-align: center
+}
+
+#tournament-progress-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0;
+  width: 100%;
+  max-width: 640px;
+  padding: 30px 20px;
+  margin-bottom: 30px;
+  border-radius: 18px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(156, 106, 222, 0.08) 0%, transparent 70%)
+}
+
+.tournament-round-connector {
+  width: 26px;
+  height: 3px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0 -1px
+}
+
+.tournament-connector-done {
+  background: linear-gradient(90deg, #66bb6a, #81c784)
+}
+
+.tournament-round-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 130px;
+  height: 120px;
+  padding: 14px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0
+}
+
+.tournament-round-icon {
+  font-size: 1.6rem;
+  line-height: 1
+}
+
+.tournament-round-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.55)
+}
+
+.tournament-round-diff {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.4)
+}
+
+/* Difficulty-tinted, same green/amber/red/silver language as the per-
+   difficulty entry-intro flashes - round 5 (Master) reuses expert's tint,
+   same as it reuses expert's actual bot logic. */
+.tournament-round-node[data-difficulty="easy"] {
+  border-color: rgba(102, 187, 106, 0.35);
+  background: rgba(102, 187, 106, 0.06)
+}
+.tournament-round-node[data-difficulty="easy"] .tournament-round-diff { color: #81c784 }
+.tournament-round-node[data-difficulty="medium"] {
+  border-color: rgba(255, 202, 40, 0.35);
+  background: rgba(255, 202, 40, 0.06)
+}
+.tournament-round-node[data-difficulty="medium"] .tournament-round-diff { color: #ffca28 }
+.tournament-round-node[data-difficulty="hard"] {
+  border-color: rgba(239, 83, 80, 0.35);
+  background: rgba(239, 83, 80, 0.06)
+}
+.tournament-round-node[data-difficulty="hard"] .tournament-round-diff { color: #ef5350 }
+.tournament-round-node[data-difficulty="expert"] {
+  border-color: rgba(220, 220, 255, 0.3);
+  background: rgba(220, 220, 255, 0.05)
+}
+.tournament-round-node[data-difficulty="expert"] .tournament-round-diff { color: #dcdcff }
+
+.tournament-round-done {
+  box-shadow: inset 0 0 0 1px rgba(76, 175, 80, 0.4)
+}
+
+.tournament-round-done .tournament-round-label {
+  color: #81c784
+}
+
+.tournament-round-current {
+  box-shadow: inset 0 0 0 2px rgba(156, 106, 222, 0.6), 0 0 16px rgba(156, 106, 222, 0.3)
+}
+
+.tournament-round-current .tournament-round-label {
+  color: #c9a3ec
+}
+
+.tournament-round-locked {
+  opacity: 0.4
+}
+
+.tournament-trophy-node {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  font-size: 2.1rem;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  filter: grayscale(1);
+  opacity: 0.5
+}
+
+.tournament-trophy-won {
+  filter: none;
+  opacity: 1;
+  background: radial-gradient(circle, rgba(201, 168, 76, 0.25), transparent 70%);
+  border-color: rgba(201, 168, 76, 0.5);
+  box-shadow: 0 0 20px rgba(201, 168, 76, 0.4);
+  animation: tournament-trophy-bob 2.4s ease-in-out infinite
+}
+
+#tournament-home-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%
+}
+
+#btn-tournament-begin-round {
+  max-width: 340px;
+  margin-bottom: 10px
+}
+
+#btn-tournament-exit {
+  color: rgba(239, 83, 80, 0.7);
+  border-color: rgba(239, 83, 80, 0.25)
+}
+
+#btn-tournament-exit:hover {
+  color: rgba(239, 83, 80, 0.9);
+  border-color: rgba(239, 83, 80, 0.4)
+}
+
+/* ===== Header pill (mirrors #hrumble's look, violet instead of cyan) ===== */
+#htournament {
+  font-size: 0.55rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  padding: 2px 8px;
+  border: 1px solid rgba(156, 106, 222, 0.35);
+  border-radius: 3px;
+  color: #c9a3ec;
+  font-weight: 600
+}
+
+/* ===== Tournament round-result modal (mirrors #rank-results-modal) ===== */
+#tournament-round-result-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 230
+}
+
+#tournament-round-result-content {
+  background: #111;
+  border: 1px solid rgba(156, 106, 222, 0.3);
+  border-radius: 14px;
+  padding: 30px 34px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center
+}
+
+#tournament-round-result-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  margin-bottom: 14px
+}
+
+#tournament-round-result-detail {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  margin-bottom: 18px
+}
+
+#tournament-round-result-unlocks {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #c9a3ec;
+  margin-bottom: 18px
+}
+
+/* ===== Exit-tournament confirmation ===== */
+#tournament-exit-confirm-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 240
+}
+
+#tournament-exit-confirm-content {
+  background: #111;
+  border: 1px solid rgba(239, 83, 80, 0.3);
+  border-radius: 14px;
+  padding: 30px 34px;
+  max-width: 380px;
+  width: 90%;
+  text-align: center
+}
+
+#tournament-exit-confirm-content h2 {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #e8e4dc;
+  margin-bottom: 14px
+}
+
+#tournament-exit-confirm-content p {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  margin-bottom: 20px
+}
+
+#btn-tournament-exit-confirm {
+  background: linear-gradient(135deg, #ef5350, #d32f2f);
+  color: #fff5f5;
+  margin-bottom: 10px
+}
+
+#btn-tournament-exit-confirm:hover {
+  background: linear-gradient(135deg, #f2645f, #dc3a3a);
+  box-shadow: 0 4px 20px rgba(239, 83, 80, 0.35)
+}
+
+/* ===== Spins page - a giant spinnable wheel, gold/violet accented to sit
+   between Tournament's violet and the site's gold, since it pays out in
+   both coins and XP. ===== */
+#spins-page-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 480px;
+  width: 100%
+}
+
+#spins-subtitle {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin-bottom: 26px
+}
+
+#spin-wheel-wrap {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin-bottom: 22px
+}
+
+#spin-wheel-svg-wrap {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 8px 30px rgba(0, 0, 0, 0.55))
+}
+
+#spin-wheel-svg-wrap svg {
+  width: 100%;
+  height: 100%;
+  display: block
+}
+
+#spin-wheel-rotor {
+  transform-origin: 150px 150px;
+  transform: rotate(0deg);
+  transition: transform 5s cubic-bezier(0.14, 0.67, 0.1, 1)
+}
+
+#spin-wheel-pointer {
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.8rem;
+  color: #c9a84c;
+  z-index: 3;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6))
+}
+
+#spin-wheel-hub {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #2a2536 0%, #17141e 70%);
+  border: 3px solid #c9a84c;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  z-index: 2;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5)
+}
+
+#spin-sparkles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 4
+}
+
+.spin-sparkle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  font-size: 1.15rem;
+  transform: translate(-50%, -50%);
+  animation: spin-sparkle-burst 0.95s ease-out forwards;
+  will-change: transform, opacity
+}
+
+@keyframes spin-sparkle-burst {
+  0% { transform: translate(-50%, -50%) translate(calc(var(--sx) * 60px), calc(var(--sy) * 60px)) scale(0.4); opacity: 0 }
+  25% { opacity: 1 }
+  100% { transform: translate(-50%, -50%) translate(calc(var(--sx) * 190px), calc(var(--sy) * 190px)) scale(1.15); opacity: 0 }
+}
+
+#spins-coins-row {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1rem;
+  color: #e8e4dc;
+  margin-bottom: 16px
+}
+
+#btn-spin {
+  min-width: 220px;
+  font-weight: 700
+}
+
+#spin-result {
+  margin-top: 20px;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  text-align: center;
+  animation: spin-result-pop 0.4s ease
+}
+
+@keyframes spin-result-pop {
+  0% { opacity: 0; transform: scale(0.7) }
+  60% { opacity: 1; transform: scale(1.08) }
+  100% { opacity: 1; transform: scale(1) }
+}
+
+.spin-result-coins { color: #c9a84c }
+.spin-result-xp { color: #6bbf6b }
+.spin-result-jackpot {
+  font-size: 1.6rem;
+  background: linear-gradient(90deg, #ffd166, #9c6ade, #ffd166);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: spin-result-pop 0.4s ease, spin-jackpot-shimmer 1.8s linear infinite
+}
+
+@keyframes spin-jackpot-shimmer {
+  to { background-position: 200% center }
+}
+
+@media (max-width: 480px) {
+  #spin-wheel-wrap {
+    width: 260px;
+    height: 260px
+  }
 }

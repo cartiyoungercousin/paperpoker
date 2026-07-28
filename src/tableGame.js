@@ -14,6 +14,10 @@ import { rankName } from "./deck.js";
 import { xpForHand } from "./rankTiers.js";
 import { pickLine } from "./botDialogue.js";
 import { computeHandCoinsDelta, HAND_COINS_REWARD } from "./coins.js";
+import { POWER_UPS_CATALOG, POWER_UP_HANDLERS, findPowerUp } from "./powerUps.js";
+import { decidePowerUpUse } from "./rumbleBotAI.js";
+import { RUMBLE_HANDS_TOTAL, RUMBLE_WIN_COINS_REWARD } from "./rumbleConfig.js";
+import { TOURNAMENT_ROUND_HANDS_TOTAL, TOURNAMENT_ROUNDS_TOTAL } from "./tournamentConfig.js";
 
 const BOT_NAMES = [
   "James", "Victoria", "Marcus", "Isabella",
@@ -104,6 +108,26 @@ class TableGame extends EventEmitter {
     // tournament of that many hands, ending early on a bust instead.
     this.rankedTournamentHandsTotal = 0;
     this.rankedTournamentHandsPlayed = 0;
+    // Rumble: regular poker plus power-ups, fixed 5-hand tournament, whoever
+    // has the most chips at the end wins. rumblePowerUps is assigned once,
+    // the first time startNewHand() runs in a rumble session (see
+    // _assignRumblePowerUps), and persists unused/used across every
+    // subsequent hand in the session - never re-dealt per hand.
+    this.rumbleMode = !!config.rumbleMode;
+    this.rumblePowerUps = new Map(); // playerId -> { key, used }
+    this.rumbleHandsPlayed = 0;
+    // Tournament: a durable multi-round run (see tournament_runs in
+    // src/db.js) drives which round/difficulty this table is playing right
+    // now - tournamentRunId/tournamentRoundNumber are set once per round via
+    // setTournamentMode(), read back by handleHandComplete() to report the
+    // round's outcome. Unlike rumblePowerUps above, nothing here persists
+    // itself; src/sessionRegistry.js owns the actual DB read/write for the
+    // run, TableGame only ever reports what happened in the round it just
+    // played.
+    this.tournamentMode = false;
+    this.tournamentRunId = null;
+    this.tournamentRoundNumber = 0;
+    this.tournamentHandsPlayed = 0;
     // Separate from userId above on purpose: userId only ever exists for a
     // ranked session (XP is ranked-only), but coins are earned in every mode
     // - unranked, ranked, experimental alike - so this tracks "is the human
@@ -382,6 +406,23 @@ class TableGame extends EventEmitter {
   // seated (a spectator) falls out for free: it never matches any player's
   // id, so it sees every hole card masked pre-showdown and only legalActions
   // stays null, since actingPlayerId() can never equal it either.
+  // The viewer's own Rumble power-up, if any - deliberately never includes
+  // other players' power-ups (the whole point is nobody knows what anyone
+  // else has until they use it). null outside rumble mode or before one's
+  // been assigned yet (before the session's first startNewHand() call).
+  _yourRumblePowerUp(viewerId) {
+    if (!this.rumbleMode || !viewerId) return null;
+    const entry = this.rumblePowerUps.get(viewerId);
+    if (!entry) return null;
+    const def = findPowerUp(entry.key);
+    if (!def) return null;
+    return {
+      key: def.key, name: def.name, icon: def.icon,
+      description: def.description, needsTarget: def.needsTarget,
+      used: entry.used,
+    };
+  }
+
   getStateFor(viewerId) {
     if (!this.hand) {
       return {
@@ -403,6 +444,15 @@ class TableGame extends EventEmitter {
         yourHandDescription: "",
         sessionStart: this.sessionStart || null,
         ranked: this.ranked,
+        rumbleMode: this.rumbleMode,
+        rumbleHandsPlayed: this.rumbleHandsPlayed,
+        rumbleHandsTotal: RUMBLE_HANDS_TOTAL,
+        yourPowerUp: this._yourRumblePowerUp(viewerId),
+        tournamentMode: this.tournamentMode,
+        tournamentRoundNumber: this.tournamentRoundNumber,
+        tournamentRoundsTotal: TOURNAMENT_ROUNDS_TOTAL,
+        tournamentHandsPlayed: this.tournamentHandsPlayed,
+        tournamentHandsTotal: TOURNAMENT_ROUND_HANDS_TOTAL,
         viewerId,
       };
     }
@@ -435,6 +485,15 @@ class TableGame extends EventEmitter {
           fold: leg.fold, check: leg.check, call: leg.call,
           callAmount: leg.callAmount, bet: leg.bet, raise: leg.raise,
           minRaiseTo: leg.minRaiseTo, maxRaiseTo: leg.maxRaiseTo,
+          // The street's current total bet level (this.hand.currentRound.
+          // currentBet) - callAmount above is deliberately the INCREMENTAL
+          // amount the viewer themselves needs to add (standard poker
+          // convention: what actually leaves their stack), which can look
+          // surprisingly small if they'd already put in a lot this street
+          // from their own earlier raise. currentBet lets the client show
+          // "Call $20 (to $500)" so that's clear without changing what the
+          // button itself actually charges.
+          currentBet: this.hand.currentRound.currentBet,
         };
       }
     }
@@ -477,11 +536,96 @@ class TableGame extends EventEmitter {
       yourHandDescription,
       sessionStart: this.sessionStart || null,
       ranked: this.ranked,
+      rumbleMode: this.rumbleMode,
+      rumbleHandsPlayed: this.rumbleHandsPlayed,
+      rumbleHandsTotal: RUMBLE_HANDS_TOTAL,
+      yourPowerUp: this._yourRumblePowerUp(viewerId),
+      frozenPlayerId: this.hand.currentRound ? this.hand.currentRound.frozenPlayerId : null,
+      tournamentMode: this.tournamentMode,
+      tournamentRoundNumber: this.tournamentRoundNumber,
+      tournamentRoundsTotal: TOURNAMENT_ROUNDS_TOTAL,
+      tournamentHandsPlayed: this.tournamentHandsPlayed,
+      tournamentHandsTotal: TOURNAMENT_ROUND_HANDS_TOTAL,
       viewerId,
     };
   }
 
+  // Shuffles the power-up catalog and hands one to each currently-seated
+  // player, unique (no duplicates) as long as there are at least as many
+  // catalog entries as players - RUMBLE_FIXED_SETTINGS forces exactly 6
+  // players against a catalog bigger than 6, so every session gets a random
+  // subset rather than the exact same 6 every time. If ever seated with more
+  // players than catalog entries, cycles back through the catalog rather
+  // than leaving anyone without a power-up. Called once per session, the
+  // first time startNewHand() runs while rumbleMode is on - never re-dealt
+  // per hand.
+  _assignRumblePowerUps() {
+    const shuffled = [...POWER_UPS_CATALOG];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    this.players.forEach((p, idx) => {
+      const def = shuffled[idx % shuffled.length];
+      this.rumblePowerUps.set(p.id, { key: def.key, used: false });
+    });
+  }
+
+  // Activates playerId's (unused) Rumble power-up on their own turn - a
+  // side-channel action, independent of and alongside their normal
+  // fold/check/call/bet/raise decision (which is submitted separately, via
+  // applyPlayerAction, same turn). Dispatches to the matching handler in
+  // src/powerUps.js, then broadcasts a reveal everyone sees (just the
+  // power-up's identity, per the "nobody knows what you have until you use
+  // it" rule) plus, separately, any private info only the activator learns.
+  applyPowerUp(playerId, target) {
+    if (!this.rumbleMode || !this.hand || this.hand.complete || this.isPaused) {
+      return { ok: false, error: "Not available right now." };
+    }
+    if (this.hand.actingPlayerId() !== playerId) {
+      return { ok: false, error: "You can only use your power-up on your own turn." };
+    }
+    const entry = this.rumblePowerUps.get(playerId);
+    if (!entry || entry.used) {
+      return { ok: false, error: "No power-up available." };
+    }
+    const def = findPowerUp(entry.key);
+    const handler = POWER_UP_HANDLERS[entry.key];
+    if (!def || !handler) {
+      return { ok: false, error: "Unknown power-up." };
+    }
+    const result = handler(this, this.hand, playerId, target) || {};
+    if (result.error) {
+      return { ok: false, error: result.error };
+    }
+    entry.used = true;
+    this.emit("powerUpActivated", {
+      playerId, key: def.key, name: def.name, icon: def.icon,
+      target: target || null,
+      ...(result.revealPayload || {}),
+    });
+    if (result.privateInfo) {
+      this.emit("powerUpPrivateInfo", { playerId, ...result.privateInfo });
+    }
+    this.handHistory.push(`${this._displayNameFor(playerId)} used ${def.name}`);
+    this.emit("stateChanged");
+    return { ok: true };
+  }
+
   startNewHand() {
+    // A rumble tournament is always exactly RUMBLE_HANDS_TOTAL hands - once
+    // that many have been played, no further hand is dealt (the client
+    // shows the tournament-complete results screen instead of a "Next
+    // Hand"/"Continue" affordance at that point).
+    if (this.rumbleMode && this.rumbleHandsPlayed >= RUMBLE_HANDS_TOTAL) return;
+    if (this.rumbleMode && this.rumblePowerUps.size === 0) this._assignRumblePowerUps();
+    // Same guard for a Tournament round: once its TOURNAMENT_ROUND_HANDS_TOTAL
+    // hands are played, tournamentMode stays on (only cleared by
+    // updateSettings()'s clean-slate reset or an explicit exit) so the
+    // client can still render "this round is over" - but nothing should be
+    // able to deal an 11th hand into that same round, even a stray "Next
+    // Hand" click racing ahead of the round-result modal actually showing.
+    if (this.tournamentMode && this.tournamentHandsPlayed >= TOURNAMENT_ROUND_HANDS_TOTAL) return;
     if (this.botTimeout) clearTimeout(this.botTimeout);
     if (this._reactionTimeout) clearTimeout(this._reactionTimeout);
     this._reactionTimeout = null;
@@ -638,6 +782,22 @@ class TableGame extends EventEmitter {
       if (!this.hand || this.hand.complete || this.isPaused) return;
       if (this.hand.actingPlayerId() !== actingId) return;
 
+      // Rumble: decide whether to fire the power-up first - a side-channel
+      // action alongside (not instead of) the normal poker decision below,
+      // same as a human using theirs then still submitting fold/check/call/
+      // bet/raise. applyPowerUp() re-validates turn ownership/availability
+      // itself, so this is safe even though we're already inside the "it's
+      // actingId's turn" guard above.
+      if (this.rumbleMode) {
+        const entry = this.rumblePowerUps.get(actingId);
+        if (entry && !entry.used) {
+          const powerUpDecision = decidePowerUpUse(actingId, this.hand, entry.key, this);
+          if (powerUpDecision && powerUpDecision.use) {
+            this.applyPowerUp(actingId, powerUpDecision.target);
+          }
+        }
+      }
+
       // Choose bot decision function based on difficulty
       let getAction;
       if (this.difficulty === 'hard') {
@@ -718,8 +878,55 @@ class TableGame extends EventEmitter {
     }, delay);
   }
 
+  // Applies Insurance/Bounty Hunter's payout bonuses in place, directly on
+  // the SAME Map object handleHandComplete()'s own payout loop reads right
+  // after this returns - both bonuses are sourced fresh, from the house,
+  // never taken from another player's share of the pot. "Went all-in or
+  // called a big bet" (Insurance's eligibility condition) is simplified to
+  // "contributed at least half the starting stack this hand" - close enough
+  // for a heuristic bonus without needing to replay this hand's full action
+  // history to distinguish exactly how those chips went in.
+  _applyRumblePayoutAdjustments() {
+    if (!this.rumbleMode || !this.hand || !this.hand.result) return;
+    const payouts = this.hand.result.payouts;
+    const bigCommitment = this.startingStack * 0.5;
+
+    if (this.hand._rumbleInsurancePlayers) {
+      for (const playerId of this.hand._rumbleInsurancePlayers) {
+        const contributed = this.hand.totalContributed.get(playerId) || 0;
+        const payout = payouts.get(playerId) || 0;
+        const lost = Math.max(0, contributed - payout);
+        if (contributed >= bigCommitment && lost > 0) {
+          payouts.set(playerId, payout + Math.floor(lost * 0.5));
+        }
+      }
+    }
+    if (this.hand._rumbleBountyPlayers) {
+      for (const playerId of this.hand._rumbleBountyPlayers) {
+        const contributed = this.hand.totalContributed.get(playerId) || 0;
+        const payout = payouts.get(playerId) || 0;
+        if (payout > contributed) {
+          payouts.set(playerId, payout + Math.floor(payout * 0.25));
+        }
+      }
+    }
+    // Deadman's Fold: a FULL refund (not Insurance's 50%) of everything the
+    // player put in this hand, but only if they actually ended up folding -
+    // checked here at payout time rather than at fold time itself, same
+    // deferred-resolution shape Insurance/Bounty Hunter already use.
+    if (this.hand._rumbleDeadmansFoldPlayers) {
+      for (const playerId of this.hand._rumbleDeadmansFoldPlayers) {
+        if (!this.hand.folded.has(playerId)) continue;
+        const contributed = this.hand.totalContributed.get(playerId) || 0;
+        const payout = payouts.get(playerId) || 0;
+        if (contributed > 0) payouts.set(playerId, payout + contributed);
+      }
+    }
+  }
+
   handleHandComplete() {
     if (!this.hand || !this.hand.result) return;
+    this._applyRumblePayoutAdjustments();
     this.stats.handsPlayed++;
     if (this._humanVpipThisHand) this.stats.vpipHands++;
 
@@ -768,17 +975,25 @@ class TableGame extends EventEmitter {
     else if (youNetThisHand < 0) this.stats.currentStreak = this.stats.currentStreak <= 0 ? this.stats.currentStreak - 1 : -1;
 
     // Ranked XP: only for a logged-in, ranked session, and only for a hand
-    // "You" were actually dealt into. Win/loss here is the same payout>0
-    // definition already used for the handsWon stat above (youWon), not the
-    // dollar-value net - a min-raise loss and an all-in cooler cost the same XP.
+    // "You" were actually dealt into. Whether it's a win or a loss is the
+    // same payout>0 definition already used for the handsWon stat above
+    // (youWon); the XP *magnitude* scales with youNetThisHand - the size of
+    // YOUR OWN actual win/loss - rather than the hand's total pot size.
+    // Pot size used to be the scaling basis, but that let a hand you folded
+    // out of cheaply (a tiny loss for you) get inflated XP just because the
+    // remaining players kept battling and built a huge pot after you were
+    // already out, and conversely undercounted a big multi-way win where
+    // your own profit (pot minus what you put in) exceeds your own stake.
     if (this.ranked && this.userId && youDealtIn) {
-      const potSize = this.hand.result.pots ? this.hand.result.pots.reduce((s, pot) => s + pot.amount, 0) : 0;
-      const xpDelta = xpForHand(this.difficulty, youWon, potSize, this.startingStack);
+      const xpDelta = xpForHand(this.difficulty, youWon, Math.abs(youNetThisHand), this.startingStack);
       this.emit('xpEarned', { userId: this.userId, delta: xpDelta });
 
       // Lifetime ranked stats (profile page) - a separate event since it's a
       // different persisted table than XP, but computed from the exact same
-      // per-hand numbers already gathered above.
+      // per-hand numbers already gathered above. potSize here is purely
+      // informational (not used for XP scaling above - see the comment
+      // block on this whole branch).
+      const potSize = this.hand.result.pots ? this.hand.result.pots.reduce((s, pot) => s + pot.amount, 0) : 0;
       const reachedShowdown = !!(this.hand.result.showdown && !this.hand.folded.has("You"));
       this.emit('rankedHandComplete', {
         userId: this.userId,
@@ -792,39 +1007,38 @@ class TableGame extends EventEmitter {
       });
     }
 
-    // Coins: unlike XP above, this fires for a logged-in player in ANY mode
-    // (unranked, ranked, experimental) - just for playing a hand, not tied
-    // to ranked status. humanUserId is independent of the ranked-only userId
-    // above for exactly this reason.
+    // Coins: unlike XP above, this fires for a logged-in player in solo
+    // unranked/experimental play only - Ranked is a pure skill ladder now,
+    // no coins involved at all, so it's deliberately excluded here rather
+    // than given a bonus amount. humanUserId is independent of the
+    // ranked-only userId above for this reason. Rumble is excluded too - its
+    // reward structure is the 5-hand tournament outcome itself, not a
+    // per-hand coin trickle, and its difficulty isn't one of the
+    // Easy/Medium/Hard/Expert tiers computeHandCoinsDelta expects anyway.
+    // Tournament mode is excluded for the same reason as Rumble - its reward
+    // is the tier's entry-fee/payout economy (see the tournamentMode block
+    // below), not a per-hand trickle on top of it.
     //
-    // Ranked keeps the old flat per-hand reward (it already has its own
-    // XP-based progression - coins there are just a bonus, not a result-
-    // based system). Unranked/experimental instead scales with how big the
-    // win actually was, costs a coin for a hand you didn't come out ahead
-    // on, and adds an escalating bonus on top of a 3+ win streak - see
-    // computeHandCoinsDelta's own comment for the exact tiers.
-    if (this.humanUserId && youDealtIn) {
-      if (this.ranked) {
-        this.emit('coinsEarned', { userId: this.humanUserId, delta: HAND_COINS_REWARD, tier: null, streakBonus: 0 });
-      } else {
-        const { delta, tier, streakBonus } = computeHandCoinsDelta({
-          netThisHand: youNetThisHand,
-          startingStack: this.startingStack,
-          winStreak: this.stats.currentStreak,
-        });
-        this.emit('coinsEarned', { userId: this.humanUserId, delta, tier, streakBonus });
-      }
+    // The reward is keyed by bot difficulty (see computeHandCoinsDelta) -
+    // Easy/Medium/Hard/Expert pay progressively more for a win, the
+    // experimental personalities pay Easy's rate, and any loss costs a flat
+    // 1 coin regardless of difficulty.
+    if (this.humanUserId && youDealtIn && !this.ranked && !this.rumbleMode && !this.tournamentMode) {
+      const { delta, tier } = computeHandCoinsDelta({
+        difficulty: this.difficulty,
+        won: youNetThisHand > 0,
+      });
+      this.emit('coinsEarned', { userId: this.humanUserId, delta, tier });
     }
     // Room mode's equivalent - potentially several logged-in accounts at
     // once, so every seat with a known userId that was actually dealt into
     // this hand gets its own coinsEarned event (playerUserIds is always
     // empty in solo mode, so this is a no-op there - never double-pays the
-    // humanUserId case above). Kept on the flat reward for now - the
-    // win-streak/win-size tiers above are computed from solo's own "You"-
-    // scoped stats, which don't have a per-seat equivalent for room players.
+    // humanUserId case above). Kept on the flat reward for now - there's no
+    // per-seat difficulty/result tracking for arbitrary room players yet.
     for (const [playerId, userId] of this.playerUserIds) {
       if (this.hand.order.includes(playerId)) {
-        this.emit('coinsEarned', { userId, delta: HAND_COINS_REWARD, tier: null, streakBonus: 0 });
+        this.emit('coinsEarned', { userId, delta: HAND_COINS_REWARD, tier: null });
       }
     }
 
@@ -848,11 +1062,73 @@ class TableGame extends EventEmitter {
       }
     }
 
+    // Rumble tournament progression: always exactly RUMBLE_HANDS_TOTAL hands
+    // (never bust-ends-it-early like ranked, and never client-configurable -
+    // see src/rumbleConfig.js). Once the last hand's payouts above have
+    // landed in every player's stack, declare whoever has the most chips
+    // the winner (co-declared on an exact tie - no tiebreaker for v1).
+    // rumbleMode is deliberately left on afterward (unlike ranked resetting
+    // this.ranked) so the client can still render this as "a completed
+    // rumble session" - updateSettings() is what actually resets it, the
+    // same clean-slate reset every other mode already goes through when a
+    // brand-new game starts.
+    if (this.rumbleMode) {
+      this.rumbleHandsPlayed++;
+      if (this.rumbleHandsPlayed >= RUMBLE_HANDS_TOTAL) {
+        const standings = this.players
+          .map((p) => ({ id: p.id, displayName: p.displayName || p.id, stack: p.stack }))
+          .sort((a, b) => b.stack - a.stack);
+        const topStack = standings.length ? standings[0].stack : 0;
+        const winners = standings.filter((s) => s.stack === topStack).map((s) => s.id);
+        this.emit('rumbleSessionComplete', { standings, winners, handsPlayed: this.rumbleHandsPlayed });
+        // Flat coin reward for winning the session (co-winners on a tie all
+        // get paid, matching the tie-friendly winners list above) - nothing
+        // is deducted on a loss, see RUMBLE_WIN_COINS_REWARD's own comment.
+        if (this.humanUserId && winners.includes("You")) {
+          this.emit('coinsEarned', { userId: this.humanUserId, delta: RUMBLE_WIN_COINS_REWARD, tier: 'rumble' });
+        }
+      }
+    }
+
+    // Tournament round progression: always exactly TOURNAMENT_ROUND_HANDS_TOTAL
+    // hands per round. Unlike Rumble's "co-winners on a tie" v1 stance, this
+    // uses a STRICT top-stack rule - real coins are non-refundably staked on
+    // a tournament run, so an exact tie does not advance. TableGame itself
+    // never touches the database for this - it just reports what happened;
+    // src/sessionRegistry.js's tournamentRoundComplete listener owns the
+    // actual tournament_runs read/write (advance the round, close out the
+    // run, award the payout, grant reward cosmetics).
+    if (this.tournamentMode) {
+      this.tournamentHandsPlayed++;
+      if (this.tournamentHandsPlayed >= TOURNAMENT_ROUND_HANDS_TOTAL) {
+        const standings = this.players
+          .map((p) => ({ id: p.id, displayName: p.displayName || p.id, stack: p.stack }))
+          .sort((a, b) => b.stack - a.stack);
+        const topStack = standings.length ? standings[0].stack : 0;
+        const tiedForTop = standings.filter((s) => s.stack === topStack);
+        const won = tiedForTop.length === 1 && tiedForTop[0].id === "You";
+        this.emit('tournamentRoundComplete', {
+          runId: this.tournamentRunId,
+          roundNumber: this.tournamentRoundNumber,
+          won,
+          tied: tiedForTop.length > 1,
+          standings,
+        });
+      }
+    }
+
     // All-In Equity / luck-adjusted EV: only defined for hands where everyone
     // still live got all-in before the river (the remaining runout was pure
-    // chance) and "You" were one of the participants.
+    // chance) and "You" were one of the participants. Skipped entirely for
+    // Rumble hands - card-manipulation power-ups (Sleight of Hand today,
+    // more in future waves) can discard a card that was already seen, and
+    // this equity math has no concept of a "dead" card - see src/equity.js's
+    // unseenPool(), which reconstructs "unseen" as the full deck minus
+    // what's currently visible, with no memory of anything seen-then-
+    // discarded. Rather than risk a silently-wrong luck stat, Rumble hands
+    // just don't compute one at all.
     let allInEVThisHand = null;
-    if (youDealtIn && this.hand.allInSnapshot) {
+    if (!this.rumbleMode && youDealtIn && this.hand.allInSnapshot) {
       const equity = computeAllInEquity(this.hand.allInSnapshot);
       const youEquity = equity["You"];
       if (youEquity !== undefined) {
@@ -956,6 +1232,31 @@ class TableGame extends EventEmitter {
     this.emit('stateChanged');
   }
 
+  // runId/roundNumber are the caller's responsibility to resolve from the
+  // durable tournament_runs row (src/sessionRegistry.js) - this just stores
+  // them and resets the round's own hand counter to 0. Called from the
+  // beginTournamentRound socket handler right before startGame(), same spot
+  // setRankedMode is called from for a ranked session.
+  setTournamentMode(on, { runId, roundNumber } = {}) {
+    this.tournamentMode = !!on;
+    this.tournamentRunId = this.tournamentMode ? runId : null;
+    this.tournamentRoundNumber = this.tournamentMode ? roundNumber : 0;
+    this.tournamentHandsPlayed = 0;
+    this.emit('stateChanged');
+  }
+
+  // Clears tournament state immediately with no other side effects - called
+  // when the player exits a tournament run mid-round (POST /api/tournament/
+  // exit) so any hand still in flight just finishes as an ordinary,
+  // non-tournament hand instead of handleHandComplete() trying to report a
+  // round outcome into a run that's already been closed out.
+  cancelTournamentMode() {
+    this.tournamentMode = false;
+    this.tournamentRunId = null;
+    this.tournamentRoundNumber = 0;
+    this.tournamentHandsPlayed = 0;
+  }
+
   // Same resolution rule as setRankedMode's userId - caller resolves from
   // the authenticated socket, this just stores it. Called on every
   // updateSettings, ranked or not, so coins can be earned regardless of mode.
@@ -983,6 +1284,18 @@ class TableGame extends EventEmitter {
     this.bigBlind = config.bigBlind || this.bigBlind;
     this.minRaise = this.bigBlind;
     if (config.difficulty) this.difficulty = config.difficulty;
+    // Same pattern as ranked: the server (server.js's updateSettings socket
+    // handler) is responsible for forcing RUMBLE_FIXED_SETTINGS into config
+    // before this ever runs, so rumbleMode here is just reading the flag,
+    // not trusting the client for stack size/blinds/shot clock.
+    this.rumbleMode = !!config.rumbleMode;
+    // Unlike rumbleMode, tournamentMode is never read from config here at
+    // all - it's only ever turned on via the dedicated setTournamentMode()
+    // call, made right after updateSettings() by the beginTournamentRound
+    // socket handler (server.js), never through the generic client-settings
+    // path. This unconditional reset is what makes every updateSettings()
+    // call - including a Tournament round's own - a genuine clean slate.
+    this.tournamentMode = false;
     // config.shotClockSeconds ?? keeps 0 (no time limit) a real, settable
     // value instead of falling through to whatever it was before - unlike
     // the other fields above, "no limit" is a legitimate choice a caller can
@@ -1050,6 +1363,18 @@ class TableGame extends EventEmitter {
     this.userId = null;
     this.rankedTournamentHandsTotal = 0;
     this.rankedTournamentHandsPlayed = 0;
+    // Same clean-slate reset for Rumble - a brand-new game (rumble or not)
+    // always starts with a fresh, unassigned power-up set and hand count,
+    // even if the previous game at this table was a just-completed rumble
+    // session (see handleHandComplete()'s rumbleSessionComplete comment for
+    // why rumbleMode itself isn't reset there).
+    this.rumblePowerUps = new Map();
+    this.rumbleHandsPlayed = 0;
+    // tournamentMode itself is already reset above (never read from config);
+    // this clears the rest of its state the same clean-slate way.
+    this.tournamentRunId = null;
+    this.tournamentRoundNumber = 0;
+    this.tournamentHandsPlayed = 0;
     this.emit('stateChanged');
   }
 

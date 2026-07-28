@@ -43,6 +43,17 @@ export class Deck {
     return this.cards.splice(0, n);
   }
 
+  // Looks at the next n cards without removing them - what a subsequent
+  // draw(n) would return, unchanged. Non-mutating: safe to call any number
+  // of times (e.g. Rumble's Deck Whisperer power-up) without disturbing the
+  // real deal order.
+  peek(n = 1) {
+    if (n > this.cards.length) {
+      throw new Error("Not enough cards left in the deck");
+    }
+    return this.cards.slice(0, n);
+  }
+
   remaining() {
     return this.cards.length;
   }

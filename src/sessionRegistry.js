@@ -2,8 +2,11 @@ import { TableGame } from "./tableGame.js";
 import { applyXpDelta } from "./auth.js";
 import { applyRankedHandStats } from "./userStats.js";
 import { applyHandCoinsReward } from "./coins.js";
-import { rankForXp } from "./rankTiers.js";
+import { rankForXp, RANK_TIERS } from "./rankTiers.js";
+import { tierIndexForXp, coinBonusBetweenTiers, unlocksBetweenTiers } from "./rankUnlocks.js";
 import { generateUniqueRoomCode } from "./roomCodes.js";
+import { grantTournamentCosmetic } from "./cosmetics.js";
+import { findTournamentTier, TOURNAMENT_ROUNDS_TOTAL, TOURNAMENT_TIER_REWARDS, TOURNAMENT_VETERAN_WIN_THRESHOLD } from "./tournamentConfig.js";
 
 const CLEANUP_GRACE_MS = 5 * 60 * 1000; // 5 minutes - solo sessions
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
@@ -122,7 +125,32 @@ class SessionRegistry {
     tableGame.on('xpEarned', ({ userId, delta }) => this._handleXpEarned(id, userId, delta));
     tableGame.on('rankedHandComplete', (delta) => this._handleRankedHandComplete(delta));
     tableGame.on('rankedSessionComplete', (payload) => io.to(id).emit('rankedSessionComplete', payload));
-    tableGame.on('coinsEarned', ({ userId, delta, tier, streakBonus }) => this._handleCoinsEarned(id, userId, delta, tier, streakBonus));
+    tableGame.on('coinsEarned', ({ userId, delta, tier }) => this._handleCoinsEarned(id, userId, delta, tier));
+    // Rumble: powerUpActivated is the "everyone sees this" reveal (broadcast
+    // to the whole session room, same as botChat/botTurn above) -
+    // powerUpPrivateInfo is only ever meaningful to whichever player actually
+    // activated the power-up. A solo session's room only ever contains the
+    // one human's own socket(s), but that's NOT the same thing as "safe to
+    // broadcast" - most activations are bots using their own power-up, and
+    // this used to relay every one of those straight to the human's socket
+    // too (the exact bug: seeing a bot's X-Ray/Deck Whisperer card, or what
+    // it swapped via Sleight of Hand). Only forward it when the activator
+    // actually IS the human this room belongs to.
+    tableGame.on('powerUpActivated', (payload) => io.to(id).emit('powerUpActivated', payload));
+    tableGame.on('powerUpPrivateInfo', (payload) => {
+      const human = tableGame.players.find((p) => p.type === 'human');
+      if (human && payload.playerId === human.id) io.to(id).emit('powerUpPrivateInfo', payload);
+    });
+    tableGame.on('rumbleSessionComplete', (payload) => io.to(id).emit('rumbleSessionComplete', payload));
+    // Tournament: TableGame only ever reports a round's outcome - the actual
+    // tournament_runs read/write (advance the round, close out the run,
+    // award the payout, grant reward cosmetics) lives entirely here, same
+    // db-writer-is-SessionRegistry's-job split as every other persisted
+    // event in this file. Wrapped in try/catch like _handleXpEarned, for
+    // the same reason: this runs synchronously inside TableGame's own
+    // handleHandComplete(), and a DB problem must never propagate back into
+    // the poker engine and abort the rest of hand completion.
+    tableGame.on('tournamentRoundComplete', (payload) => this._handleTournamentRoundComplete(id, payload));
   }
 
   // Same shape and same reasoning as _handleXpEarned above (wrapped so a
@@ -132,17 +160,18 @@ class SessionRegistry {
   // (and the coin toast) updates live. broadcastTarget is a whole room's
   // group in room mode (potentially several different logged-in accounts
   // listening at once) - userId rides along in the payload so each client
-  // can tell whether this update is actually about them. tier/streakBonus
-  // ride along too so the toast can label a Big/Massive win or a streak
-  // bonus - actualDelta (from applyHandCoinsReward's floor-at-0 handling)
-  // is what's broadcast, not the requested one, so the toast never claims a
-  // bigger change than what really happened to the balance.
-  _handleCoinsEarned(broadcastTarget, userId, delta, tier, streakBonus) {
+  // can tell whether this update is actually about them. tier (the bot
+  // difficulty this hand was played at) rides along too so the toast can
+  // label which difficulty the coins came from - actualDelta (from
+  // applyHandCoinsReward's floor-at-0 handling) is what's broadcast, not the
+  // requested one, so the toast never claims a bigger change than what
+  // really happened to the balance.
+  _handleCoinsEarned(broadcastTarget, userId, delta, tier) {
     if (!this.db) return;
     try {
       const result = applyHandCoinsReward(this.db, userId, delta);
       if (!result) return;
-      this.io.to(broadcastTarget).emit('coinsUpdate', { userId, delta: result.delta, coins: result.coins, tier, streakBonus });
+      this.io.to(broadcastTarget).emit('coinsUpdate', { userId, delta: result.delta, coins: result.coins, tier });
     } catch (err) {
       console.error("Failed to persist/broadcast coins for user", userId, ":", err);
     }
@@ -168,6 +197,27 @@ class SessionRegistry {
       if (!result) return;
       const oldRank = rankForXp(result.oldXp);
       const newRank = rankForXp(result.newXp);
+
+      // Rank-up unlocks (coin bonus, experimental bots, cosmetics) key off a
+      // permanent high-water-mark tier index (users.highest_rank_tier_index),
+      // not this one hand's oldXp/newXp - a rough session's XP dip must
+      // never re-trigger (or hide) an unlock a later win crosses back over.
+      // See src/rankUnlocks.js for what each tier grants.
+      const tierRow = this.db.prepare("SELECT highest_rank_tier_index FROM users WHERE id = ?").get(userId);
+      const previousTierIndex = tierRow ? tierRow.highest_rank_tier_index : 0;
+      const newTierIndex = tierIndexForXp(result.newXp);
+      let unlocked = null;
+      if (newTierIndex > previousTierIndex) {
+        const coinBonus = coinBonusBetweenTiers(previousTierIndex, newTierIndex);
+        const { bots, cosmetics } = unlocksBetweenTiers(previousTierIndex, newTierIndex);
+        this.db.prepare("UPDATE users SET highest_rank_tier_index = ? WHERE id = ?").run(newTierIndex, userId);
+        const coinResult = coinBonus > 0 ? applyHandCoinsReward(this.db, userId, coinBonus) : null;
+        unlocked = { coinBonus, bots, cosmetics, rankLabel: RANK_TIERS[newTierIndex].label };
+        if (coinResult) {
+          this.io.to(broadcastTarget).emit('coinsUpdate', { userId, delta: coinResult.delta, coins: coinResult.coins, tier: 'rankUp' });
+        }
+      }
+
       this.io.to(broadcastTarget).emit('xpUpdate', {
         delta,
         totalXp: result.newXp,
@@ -175,6 +225,7 @@ class SessionRegistry {
         oldTotalXp: result.oldXp,
         oldRank,
         tierChanged: oldRank.label !== newRank.label,
+        unlocked,
       });
     } catch (err) {
       console.error("Failed to persist/broadcast XP for user", userId, ":", err);
@@ -193,6 +244,88 @@ class SessionRegistry {
       applyRankedHandStats(this.db, userId, stats);
     } catch (err) {
       console.error("Failed to persist ranked hand stats for user", delta.userId, ":", err);
+    }
+  }
+
+  // Does the actual tournament_runs read/write for a round's outcome -
+  // TableGame only ever reports what happened, it has no db access itself.
+  // broadcastTarget is the session's room, same as every other solo-mode
+  // handler here (Tournament is solo-only, no room-mode equivalent).
+  _handleTournamentRoundComplete(broadcastTarget, payload) {
+    if (!this.db) return;
+    try {
+      const { runId, roundNumber, won, tied, standings } = payload;
+      if (!runId) return;
+
+      // Optimistic-concurrency guard: the same account logged in on two
+      // devices/tabs could drive two independent TableGame instances off the
+      // same DB row, both finishing a round around the same time. Only apply
+      // this event if the run is still active AND still sitting at exactly
+      // the round count this event expects to advance from - otherwise it's
+      // a stale/duplicate event (the other device already applied its own),
+      // so just ignore it rather than double-advance or clobber a result.
+      const run = this.db.prepare(
+        "SELECT * FROM tournament_runs WHERE id = ? AND ended_at IS NULL AND rounds_completed = ?"
+      ).get(runId, roundNumber - 1);
+      if (!run) {
+        console.warn("Ignoring stale/duplicate tournamentRoundComplete for run", runId, "round", roundNumber);
+        return;
+      }
+
+      const tier = findTournamentTier(run.tier_key);
+      const now = Date.now();
+      const fullyWon = won && roundNumber >= TOURNAMENT_ROUNDS_TOTAL;
+      let newlyUnlocked = [];
+
+      if (!won) {
+        this.db.prepare("UPDATE tournament_runs SET ended_at = ?, won = 0 WHERE id = ?").run(now, runId);
+      } else if (!fullyWon) {
+        this.db.prepare("UPDATE tournament_runs SET rounds_completed = ? WHERE id = ?").run(roundNumber, runId);
+      } else {
+        const payout = tier ? tier.payout : 0;
+        this.db.prepare(
+          "UPDATE tournament_runs SET rounds_completed = ?, ended_at = ?, won = 1, payout_awarded = ? WHERE id = ?"
+        ).run(roundNumber, now, payout, runId);
+        if (payout > 0) {
+          const coinResult = applyHandCoinsReward(this.db, run.user_id, payout);
+          if (coinResult) {
+            this.io.to(broadcastTarget).emit('coinsUpdate', { userId: run.user_id, delta: coinResult.delta, coins: coinResult.coins, tier: 'tournamentWin' });
+          }
+        }
+
+        // Reward-unlock check: a fresh COUNT of past wins for this tier is
+        // already a correct, monotonically-non-decreasing lifetime win count
+        // (tournament_runs is insert-only and won is never un-set once true -
+        // no separate high-water-mark column needed the way rank tiers need
+        // one). Granting unconditionally whenever a threshold is met, rather
+        // than only on the exact crossing win, makes this self-healing
+        // against any bug in an earlier deploy that might have missed one.
+        const winCountRow = this.db.prepare(
+          "SELECT COUNT(*) as c FROM tournament_runs WHERE user_id = ? AND tier_key = ? AND won = 1"
+        ).get(run.user_id, run.tier_key);
+        const winCount = winCountRow ? winCountRow.c : 0;
+        const rewards = TOURNAMENT_TIER_REWARDS[run.tier_key];
+        if (rewards && winCount >= 1) {
+          const r = grantTournamentCosmetic(this.db, run.user_id, rewards.firstWin.category, rewards.firstWin.key);
+          if (r.ok && !r.alreadyOwned) newlyUnlocked.push(rewards.firstWin);
+        }
+        if (rewards && winCount >= TOURNAMENT_VETERAN_WIN_THRESHOLD) {
+          const r = grantTournamentCosmetic(this.db, run.user_id, rewards.veteran.category, rewards.veteran.key);
+          if (r.ok && !r.alreadyOwned) newlyUnlocked.push(rewards.veteran);
+        }
+      }
+
+      this.io.to(broadcastTarget).emit('tournamentRoundComplete', {
+        roundNumber, won, tied, standings,
+        tierKey: run.tier_key,
+        tierName: tier ? tier.name : run.tier_key,
+        entryFee: run.entry_fee_paid,
+        fullyWon,
+        payout: fullyWon ? (tier ? tier.payout : 0) : 0,
+        newlyUnlocked,
+      });
+    } catch (err) {
+      console.error("Failed to persist/broadcast tournament round completion:", err);
     }
   }
 
@@ -304,7 +437,7 @@ class SessionRegistry {
     // (see TableGame.playerUserIds), broadcast to the whole room same as
     // solo's _handleCoinsEarned; each connected client only updates its own
     // currentUser's balance display when the userId matches them.
-    tableGame.on('coinsEarned', ({ userId, delta, tier, streakBonus }) => this._handleCoinsEarned(broadcastGroup, userId, delta, tier, streakBonus));
+    tableGame.on('coinsEarned', ({ userId, delta, tier }) => this._handleCoinsEarned(broadcastGroup, userId, delta, tier));
   }
 
   _attachSocketToRoom(roomEntry, socket, sessionId) {

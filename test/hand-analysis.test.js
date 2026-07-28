@@ -222,12 +222,31 @@ test("gradeDecision: a mildly bad call (small equity shortfall) grades as an Ina
   assert.equal(grade.tier, "inaccuracy");
 });
 
-test("gradeDecision: bet/raise tiers scale with hand strength, from Blunder at the bottom to Brilliant at the top", () => {
-  assert.equal(gradeDecision({ action: "bet", equity: 0.10, potBefore: 50, toCall: 0 }).tier, "blunder");
-  assert.equal(gradeDecision({ action: "bet", equity: 0.30, potBefore: 50, toCall: 0 }).tier, "mistake");
-  assert.equal(gradeDecision({ action: "raise", equity: 0.40, potBefore: 50, toCall: 20 }).tier, "inaccuracy");
-  assert.equal(gradeDecision({ action: "raise", equity: 0.60, potBefore: 50, toCall: 20 }).tier, "good");
-  assert.equal(gradeDecision({ action: "bet", equity: 0.85, potBefore: 50, toCall: 0 }).tier, "brilliant");
+test("gradeDecision: bet/raise tiers scale with hand strength relative to a fair-share baseline (heads-up: fair share = 50% equity)", () => {
+  assert.equal(gradeDecision({ action: "bet", equity: 0.30, potBefore: 50, toCall: 0, numOpponents: 1 }).tier, "blunder");
+  assert.equal(gradeDecision({ action: "bet", equity: 0.45, potBefore: 50, toCall: 0, numOpponents: 1 }).tier, "mistake");
+  assert.equal(gradeDecision({ action: "raise", equity: 0.50, potBefore: 50, toCall: 20, numOpponents: 1 }).tier, "inaccuracy");
+  assert.equal(gradeDecision({ action: "raise", equity: 0.60, potBefore: 50, toCall: 20, numOpponents: 1 }).tier, "good");
+  assert.equal(gradeDecision({ action: "bet", equity: 0.85, potBefore: 50, toCall: 0, numOpponents: 1 }).tier, "brilliant");
+});
+
+test("gradeDecision: bet/raise grading adjusts for how many opponents are live, so a crowded pot's lower raw equity isn't automatically punished", () => {
+  // The exact same ~49% equity is a losing spot heads-up (fair share is 50%
+  // there) but a monster edge against 5 live opponents (fair share there is
+  // only ~16.7%, since pocket aces itself is only about a 49% favorite in a
+  // full 6-max pot) - the grade should reflect that, not treat raw equity as
+  // an absolute, opponent-count-independent bar.
+  const headsUp = gradeDecision({ action: "raise", equity: 0.49, potBefore: 50, toCall: 0, numOpponents: 1 });
+  const sixMax = gradeDecision({ action: "raise", equity: 0.49, potBefore: 50, toCall: 0, numOpponents: 5 });
+  assert.equal(headsUp.tier, "inaccuracy");
+  assert.ok(["good", "brilliant"].includes(sixMax.tier), "the same raw equity against 5 live opponents is a huge relative edge, not a shaky raise");
+});
+
+test("gradeDecision: raising the worst possible hand still grades poorly in a multiway pot, not falsely rescued by the opponent-count adjustment", () => {
+  // ~8% equity 5-way is roughly what the worst possible starting hand runs -
+  // clearly below even its adjusted ~16.7% fair share.
+  const grade = gradeDecision({ action: "raise", equity: 0.08, potBefore: 50, toCall: 0, numOpponents: 5 });
+  assert.ok(["mistake", "blunder"].includes(grade.tier));
 });
 
 test("gradeDecision: checking is always graded Good - there's no price to get wrong when the action is free", () => {

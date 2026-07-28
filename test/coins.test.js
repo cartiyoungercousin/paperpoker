@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward, computeHandCoinsDelta, DAILY_REWARD_TABLE, HAND_COINS_REWARD, WIN_STREAK_BONUS_THRESHOLD } from "../src/coins.js";
+import { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward, computeHandCoinsDelta, DAILY_REWARD_TABLE, HAND_COINS_REWARD, DIFFICULTY_COIN_REWARD } from "../src/coins.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -167,59 +167,35 @@ test("applyHandCoinsReward applies a negative delta normally when there's enough
   assert.equal(result.delta, -1);
 });
 
-// ===== computeHandCoinsDelta: unranked/experimental win-size + streak tiers =====
+// ===== computeHandCoinsDelta: difficulty-keyed reward =====
 
-test("computeHandCoinsDelta charges a flat -1 for any hand you didn't come out ahead on, regardless of how much you lost", () => {
-  assert.deepEqual(computeHandCoinsDelta({ netThisHand: -500, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 });
-  assert.deepEqual(computeHandCoinsDelta({ netThisHand: -1, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 });
-  assert.deepEqual(computeHandCoinsDelta({ netThisHand: 0, startingStack: 1000 }), { delta: -1, tier: "loss", streakBonus: 0 }, "breaking exactly even is not a win");
+test("computeHandCoinsDelta pays the difficulty-specific amount for a win: +2/+4/+6/+8 for Easy/Medium/Hard/Expert", () => {
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: "easy", won: true }), { delta: 2, tier: "easy" });
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: "medium", won: true }), { delta: 4, tier: "medium" });
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: "hard", won: true }), { delta: 6, tier: "hard" });
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: "expert", won: true }), { delta: 8, tier: "expert" });
 });
 
-test("computeHandCoinsDelta pays +1 for a small win, below the big-win threshold", () => {
-  const result = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000 }); // 10% of stack
-  assert.equal(result.delta, 1);
-  assert.equal(result.tier, "win");
+test("computeHandCoinsDelta charges a flat -1 for a loss, at every difficulty", () => {
+  for (const difficulty of ["easy", "medium", "hard", "expert"]) {
+    assert.deepEqual(computeHandCoinsDelta({ difficulty, won: false }), { delta: -1, tier: difficulty });
+  }
 });
 
-test("computeHandCoinsDelta pays +2 for a big win (20%+ of the starting stack)", () => {
-  const result = computeHandCoinsDelta({ netThisHand: 250, startingStack: 1000 }); // 25%
-  assert.equal(result.delta, 2);
-  assert.equal(result.tier, "bigWin");
+test("computeHandCoinsDelta falls back to Easy's rate for any experimental bot personality", () => {
+  for (const difficulty of ["drunk", "bluffer", "rock", "maniac", "boardroom"]) {
+    assert.deepEqual(computeHandCoinsDelta({ difficulty, won: true }), { delta: 1, tier: difficulty });
+    assert.deepEqual(computeHandCoinsDelta({ difficulty, won: false }), { delta: -1, tier: difficulty });
+  }
 });
 
-test("computeHandCoinsDelta pays +3 for a massive win (50%+ of the starting stack)", () => {
-  const result = computeHandCoinsDelta({ netThisHand: 600, startingStack: 1000 }); // 60%
-  assert.equal(result.delta, 3);
-  assert.equal(result.tier, "massiveWin");
+test("computeHandCoinsDelta falls back to Easy's rate for an unrecognized/missing difficulty", () => {
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: "not-a-real-difficulty", won: true }), { delta: 1, tier: "not-a-real-difficulty" });
+  assert.deepEqual(computeHandCoinsDelta({ difficulty: undefined, won: true }), { delta: 1, tier: undefined });
 });
 
-test("computeHandCoinsDelta tier boundaries are inclusive at exactly 20% and 50%", () => {
-  assert.equal(computeHandCoinsDelta({ netThisHand: 200, startingStack: 1000 }).tier, "bigWin");
-  assert.equal(computeHandCoinsDelta({ netThisHand: 500, startingStack: 1000 }).tier, "massiveWin");
-});
-
-test(`computeHandCoinsDelta adds a streak bonus equal to the streak once it reaches ${WIN_STREAK_BONUS_THRESHOLD}, on top of the win-tier amount`, () => {
-  const noBonusYet = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: WIN_STREAK_BONUS_THRESHOLD - 1 });
-  assert.equal(noBonusYet.streakBonus, 0);
-  assert.equal(noBonusYet.delta, 1);
-
-  const withBonus = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: WIN_STREAK_BONUS_THRESHOLD });
-  assert.equal(withBonus.streakBonus, WIN_STREAK_BONUS_THRESHOLD);
-  assert.equal(withBonus.delta, 1 + WIN_STREAK_BONUS_THRESHOLD);
-
-  const longerStreak = computeHandCoinsDelta({ netThisHand: 600, startingStack: 1000, winStreak: 5 });
-  assert.equal(longerStreak.streakBonus, 5);
-  assert.equal(longerStreak.delta, 3 + 5, "massive-win tier amount plus the streak bonus");
-});
-
-test("computeHandCoinsDelta never applies a streak bonus on a loss, even if winStreak is stale/nonzero", () => {
-  const result = computeHandCoinsDelta({ netThisHand: -50, startingStack: 1000, winStreak: 5 });
-  assert.equal(result.delta, -1);
-  assert.equal(result.streakBonus, 0);
-});
-
-test("computeHandCoinsDelta treats a negative winStreak (a losing streak) as no bonus", () => {
-  const result = computeHandCoinsDelta({ netThisHand: 100, startingStack: 1000, winStreak: -4 });
-  assert.equal(result.streakBonus, 0);
-  assert.equal(result.delta, 1);
+test("DIFFICULTY_COIN_REWARD's win amounts strictly increase from Easy through Expert", () => {
+  assert.ok(DIFFICULTY_COIN_REWARD.easy.win < DIFFICULTY_COIN_REWARD.medium.win);
+  assert.ok(DIFFICULTY_COIN_REWARD.medium.win < DIFFICULTY_COIN_REWARD.hard.win);
+  assert.ok(DIFFICULTY_COIN_REWARD.hard.win < DIFFICULTY_COIN_REWARD.expert.win);
 });

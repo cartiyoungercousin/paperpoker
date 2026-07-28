@@ -24,7 +24,17 @@ const TIER_LABEL = {
 // opponent range to weigh against, so they're graded on hand strength alone
 // instead - a bet with a strong hand reads as sound, a bet with a weak one
 // reads as shaky, regardless of whether it happened to work.
-function gradeDecision({ action, equity, potBefore, toCall }) {
+//
+// Raw win-probability against N live opponents necessarily shrinks as N
+// grows (even pocket aces is only a ~49% favorite against 5 live opponents)
+// - grading bet/raise on raw equity against a fixed absolute bar would
+// unfairly punish multiway pots, and hit hardest on the very first action of
+// a hand, when the most opponents are still live. Instead this compares
+// equity against "fair share" for the number of live opponents
+// (1 / (numOpponents + 1), what an average random hand would run) and grades
+// on how far above or below that baseline the hand's equity falls, scaled so
+// the result stays comparable whether it's a heads-up pot or a 6-way one.
+function gradeDecision({ action, equity, potBefore, toCall, numOpponents }) {
   if (typeof equity !== "number" || typeof potBefore !== "number" || typeof toCall !== "number") return null;
 
   if (action === "check") return { tier: "good", label: TIER_LABEL.good };
@@ -48,10 +58,17 @@ function gradeDecision({ action, equity, potBefore, toCall }) {
   }
 
   if (action === "bet" || action === "raise") {
-    if (equity >= 0.80) return { tier: "brilliant", label: TIER_LABEL.brilliant };
-    if (equity >= 0.55) return { tier: "good", label: TIER_LABEL.good };
-    if (equity >= 0.35) return { tier: "inaccuracy", label: TIER_LABEL.inaccuracy };
-    if (equity >= 0.20) return { tier: "mistake", label: TIER_LABEL.mistake };
+    const liveOpponents = typeof numOpponents === "number" && numOpponents > 0 ? numOpponents : 1;
+    const fairShare = 1 / (liveOpponents + 1);
+    // How much of the equity "headroom" above fair share got captured, as a
+    // fraction of the maximum possible headroom (1 - fairShare) - this stays
+    // in roughly the same range regardless of how many opponents are live,
+    // unlike raw equity itself.
+    const excessRatio = (equity - fairShare) / (1 - fairShare);
+    if (excessRatio >= 0.45) return { tier: "brilliant", label: TIER_LABEL.brilliant };
+    if (excessRatio >= 0.10) return { tier: "good", label: TIER_LABEL.good };
+    if (excessRatio >= -0.05) return { tier: "inaccuracy", label: TIER_LABEL.inaccuracy };
+    if (excessRatio >= -0.20) return { tier: "mistake", label: TIER_LABEL.mistake };
     return { tier: "blunder", label: TIER_LABEL.blunder };
   }
 
@@ -97,6 +114,13 @@ function buildHandAnalysis(tableGame) {
   const streetSnapshots = tableGame.streetSnapshots.map((snap) => {
     const streetIdx = STREETS_ORDER.indexOf(snap.street);
 
+    const foldedBefore = new Set(
+      tableGame.currentHandActions
+        .filter((a) => a.action === "fold" && STREETS_ORDER.indexOf(a.street) < streetIdx)
+        .map((a) => a.actor)
+    );
+    const numOpponents = hand.order.filter((id) => id !== "You" && !foldedBefore.has(id)).length;
+
     let equityAtStreet = null;
     let equityIsExact = false;
     if (heroHoleCards.length === 2 && streetIdx <= youFoldStreetIdx) {
@@ -105,12 +129,6 @@ function buildHandAnalysis(tableGame) {
         equityAtStreet = equity["You"] ?? null;
         equityIsExact = true;
       } else {
-        const foldedBefore = new Set(
-          tableGame.currentHandActions
-            .filter((a) => a.action === "fold" && STREETS_ORDER.indexOf(a.street) < streetIdx)
-            .map((a) => a.actor)
-        );
-        const numOpponents = hand.order.filter((id) => id !== "You" && !foldedBefore.has(id)).length;
         equityAtStreet = estimateEquityVsUnknown({ heroHoleCards, board: snap.board, numOpponents });
         equityIsExact = false;
       }
@@ -120,7 +138,7 @@ function buildHandAnalysis(tableGame) {
       .filter((a) => a.street === snap.street)
       .map((a) => {
         if (a.actor !== "You") return a;
-        const grade = gradeDecision({ action: a.action, equity: equityAtStreet, potBefore: a.potBefore, toCall: a.toCall });
+        const grade = gradeDecision({ action: a.action, equity: equityAtStreet, potBefore: a.potBefore, toCall: a.toCall, numOpponents });
         if (grade) yourGradedTiers.push(grade.tier);
         return { ...a, grade };
       });

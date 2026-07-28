@@ -68,34 +68,41 @@ test("xpForHand: an unrecognized difficulty falls back to the easy table rather 
   assert.equal(xpForHand("nonsense", false), DIFFICULTY_XP.easy.loss);
 });
 
-test("xpForHand: without potSize/startingStack, returns the flat base amount unscaled (existing callers keep working)", () => {
+test("xpForHand: without a win/loss amount and startingStack, returns the flat base amount unscaled (existing callers keep working)", () => {
   assert.equal(xpForHand("medium", true), DIFFICULTY_XP.medium.win);
-  assert.equal(xpForHand("medium", true, undefined, 1000), DIFFICULTY_XP.medium.win, "missing potSize alone should also skip scaling");
+  assert.equal(xpForHand("medium", true, undefined, 1000), DIFFICULTY_XP.medium.win, "missing winLossAmount alone should also skip scaling");
 });
 
-test("xpForHand: a pot equal to the starting stack scales XP by exactly 1x (no change)", () => {
+test("xpForHand: a win/loss equal to the starting stack scales XP by exactly 1x (no change)", () => {
   assert.equal(xpForHand("medium", true, 1000, 1000), DIFFICULTY_XP.medium.win);
   assert.equal(xpForHand("medium", false, 1000, 1000), DIFFICULTY_XP.medium.loss);
 });
 
-test("xpForHand: a small pot is floored at 0.25x the base amount, not scaled down to near zero", () => {
-  // A tiny pot (1% of the starting stack) would be 0.01x unclamped - the
-  // floor keeps even a min-bet hand worth something.
+test("xpForHand: a small win/loss is floored at 0.25x the base amount, not scaled down to near zero", () => {
+  // A tiny win/loss (1% of the starting stack) would be 0.01x unclamped -
+  // the floor keeps even a min-bet hand worth something.
   const expected = Math.round(DIFFICULTY_XP.medium.win * 0.25);
   assert.equal(xpForHand("medium", true, 10, 1000), expected);
 });
 
-test("xpForHand: a huge pot is capped at 3x the base amount, not scaled up without bound", () => {
-  // A pot 10x the starting stack (a multi-way monster or a re-buy scenario)
-  // would be 10x unclamped - the cap keeps one hand from swinging a session.
+test("xpForHand: a huge win/loss is capped at 3x the base amount, not scaled up without bound", () => {
+  // A win/loss 10x the starting stack (a re-buy scenario) would be 10x
+  // unclamped - the cap keeps one hand from swinging a whole session.
   const expected = Math.round(DIFFICULTY_XP.medium.win * 3);
   assert.equal(xpForHand("medium", true, 10000, 1000), expected);
 });
 
-test("xpForHand: pot-scaling applies the same multiplier to a loss as to a win, for the same pot ratio", () => {
-  // A half-stack pot -> 0.5x multiplier, applied to whichever base (win or
-  // loss) is relevant - losing a bigger pot should cost more XP too.
-  const potSize = 500, startingStack = 1000;
-  assert.equal(xpForHand("medium", true, potSize, startingStack), Math.round(DIFFICULTY_XP.medium.win * 0.5));
-  assert.equal(xpForHand("medium", false, potSize, startingStack), Math.round(DIFFICULTY_XP.medium.loss * 0.5));
+test("xpForHand: scaling applies the same multiplier to a loss as to a win, for the same win/loss ratio", () => {
+  // A half-stack win/loss -> 0.5x multiplier, applied to whichever base
+  // (win or loss) is relevant - losing a bigger amount should cost more XP too.
+  const winLossAmount = 500, startingStack = 1000;
+  assert.equal(xpForHand("medium", true, winLossAmount, startingStack), Math.round(DIFFICULTY_XP.medium.win * 0.5));
+  assert.equal(xpForHand("medium", false, winLossAmount, startingStack), Math.round(DIFFICULTY_XP.medium.loss * 0.5));
+});
+
+test("xpForHand: a cheap fold that lost you little earns less XP than an all-in cooler, even if the ranked hand later grew into a big pot between other players (the actual bug this scaling basis fixes)", () => {
+  const startingStack = 1000;
+  const cheapFoldXp = xpForHand("medium", false, 20, startingStack); // you only lost your blind/one call before folding
+  const allInLossXp = xpForHand("medium", false, 1000, startingStack); // you lost your whole stack
+  assert.ok(allInLossXp < cheapFoldXp, "a bigger personal loss should cost strictly more XP than a small one");
 });

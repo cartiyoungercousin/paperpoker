@@ -93,6 +93,23 @@ function destroySession(db, token) {
   db.prepare(`DELETE FROM sessions WHERE token_hash = ?`).run(hashToken(token));
 }
 
+// Permanently deletes a user and everything tied to their account - every
+// session, unlocked cosmetic, and XP event, then the user row itself.
+// The schema declares these as ON DELETE CASCADE, but nothing here turns on
+// `PRAGMA foreign_keys`, so cascading isn't actually enforced by sqlite -
+// deleting child rows explicitly, in this order, gets the same end result
+// without depending on that pragma ever being set. Returns true if a user
+// was actually deleted, false if userId didn't exist (nothing to do).
+function deleteAccount(db, userId) {
+  const row = db.prepare(`SELECT id FROM users WHERE id = ?`).get(userId);
+  if (!row) return false;
+  db.prepare(`DELETE FROM sessions WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM user_unlocks WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM xp_events WHERE user_id = ?`).run(userId);
+  db.prepare(`DELETE FROM users WHERE id = ?`).run(userId);
+  return true;
+}
+
 // In-memory login rate limiter, keyed by "email:ip" - not persisted (a
 // restart clears it), which is an acceptable trade-off here: this is a basic
 // brute-force speed bump, not a security-critical distributed rate limit.
@@ -161,6 +178,10 @@ function toPublicUser(row) {
     coins: row.coins,
     equippedCardBack: row.equipped_card_back,
     equippedFeltColor: row.equipped_felt_color,
+    equippedRippleColor: row.equipped_ripple_color,
+    equippedNameFlair: row.equipped_name_flair,
+    equippedTableTheme: row.equipped_table_theme,
+    equippedVictoryEffect: row.equipped_victory_effect,
   };
 }
 
@@ -184,7 +205,7 @@ function applyXpDelta(db, userId, delta) {
 export {
   hashPassword, verifyPassword, hashToken,
   createUser, findUserByEmail, findUserById,
-  issueSession, resolveSession, destroySession,
+  issueSession, resolveSession, destroySession, deleteAccount,
   isRateLimited, recordLoginFailure, clearLoginAttempts,
   isSignupRateLimited, recordSignupAttempt,
   toPublicUser, applyXpDelta,

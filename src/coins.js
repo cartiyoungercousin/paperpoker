@@ -19,45 +19,41 @@ function utcDayNumber(ms) {
 // paying out at the day-7 rate every seventh day indefinitely.
 const DAILY_REWARD_TABLE = [10, 15, 20, 25, 30, 35, 50];
 
-// Flat reward for simply being dealt into a hand while logged in - kept as
-// the reward for Ranked (which already has its own XP-based progression;
-// coins there are a simple bonus, not tied to result) and for room-mode
-// seats other than the local human (per-seat win-streak tracking doesn't
-// exist for arbitrary room players yet). Unranked/experimental solo play
-// uses computeHandCoinsDelta below instead - see its own comment.
+// Flat reward for simply being dealt into a hand while logged in - kept for
+// room-mode seats other than the local human (per-seat difficulty tracking
+// doesn't exist for arbitrary room players yet). Ranked play now earns no
+// coins at all - see the coinsEarned block in TableGame.handleHandComplete
+// - and solo unranked/experimental play uses computeHandCoinsDelta below
+// instead.
 const HAND_COINS_REWARD = 2;
 
-// A win/loss streak of at least this many hands in a row starts earning a
-// bonus equal to the streak length itself (3 in a row = +3 bonus, 4 in a row
-// = +4, and so on) - an escalating incentive to keep a hot streak going,
-// on top of (not instead of) the normal win-tier amount below.
-const WIN_STREAK_BONUS_THRESHOLD = 3;
+// Unranked/experimental coin reward, keyed by bot difficulty rather than how
+// big the win was - a bigger win against Easy bots doesn't pay more than a
+// min-raise win against Easy bots, but the SAME win against Expert bots pays
+// more, since that's a harder, more meaningful result either way. A hand you
+// didn't come out ahead on (fold, lose at showdown, or break exactly even)
+// costs a flat 1 coin regardless of difficulty.
+const DIFFICULTY_COIN_REWARD = {
+  easy: { win: 2, loss: -1 },
+  medium: { win: 4, loss: -1 },
+  hard: { win: 6, loss: -1 },
+  expert: { win: 8, loss: -1 },
+};
 
-// Unranked/experimental coin reward, scaled by how big the win actually was
-// relative to the starting stack, rather than a flat amount regardless of
-// pot size - a min-raise nit-win and an all-in double-up shouldn't pay the
-// same. A hand you didn't come out ahead on (fold, lose at showdown, or
-// break exactly even) costs a flat 1 coin regardless of how much you lost -
-// losing bigger doesn't cost extra, winning bigger earns more.
-const WIN_TIER_THRESHOLDS = [
-  { minRatio: 0.5, delta: 3, tier: "massiveWin" },
-  { minRatio: 0.2, delta: 2, tier: "bigWin" },
-  { minRatio: 0, delta: 1, tier: "win" },
-];
+// The 5 "experimental" bot personalities (Drunk, Bluffer, Rock, Maniac,
+// Boardroom) sit outside the Easy/Medium/Hard/Expert ladder entirely, so
+// they - and any other unrecognized difficulty value - fall back to this,
+// matching Easy's payout.
+const EXPERIMENTAL_COIN_REWARD = { win: 1, loss: -1 };
 
-// netThisHand: this player's own payout minus their own contribution for the
-// hand (positive = won money, zero or negative = didn't). winStreak: the
-// running win-streak count AFTER this hand (see TableGame.stats.
-// currentStreak) - only its sign/magnitude matters, a loss streak (negative)
-// never grants a bonus.
-function computeHandCoinsDelta({ netThisHand, startingStack, winStreak = 0 }) {
-  if (netThisHand <= 0) {
-    return { delta: -1, tier: "loss", streakBonus: 0 };
-  }
-  const ratio = startingStack > 0 ? netThisHand / startingStack : 0;
-  const { delta: tierDelta, tier } = WIN_TIER_THRESHOLDS.find((t) => ratio >= t.minRatio);
-  const streakBonus = winStreak >= WIN_STREAK_BONUS_THRESHOLD ? winStreak : 0;
-  return { delta: tierDelta + streakBonus, tier, streakBonus };
+// won: whether this player came out ahead this hand (their own payout minus
+// their own contribution was positive). difficulty: the bot difficulty the
+// hand was played at (TableGame.difficulty) - looked up in
+// DIFFICULTY_COIN_REWARD, falling back to EXPERIMENTAL_COIN_REWARD for the
+// experimental personalities and anything else unrecognized.
+function computeHandCoinsDelta({ difficulty, won }) {
+  const entry = DIFFICULTY_COIN_REWARD[difficulty] || EXPERIMENTAL_COIN_REWARD;
+  return { delta: won ? entry.win : entry.loss, tier: difficulty };
 }
 
 // Claims today's daily-login reward for userId, if it hasn't been claimed
@@ -120,5 +116,5 @@ function applyHandCoinsReward(db, userId, delta) {
 export {
   claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward,
   computeHandCoinsDelta,
-  DAILY_REWARD_TABLE, HAND_COINS_REWARD, WIN_STREAK_BONUS_THRESHOLD,
+  DAILY_REWARD_TABLE, HAND_COINS_REWARD, DIFFICULTY_COIN_REWARD,
 };

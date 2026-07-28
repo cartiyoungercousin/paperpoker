@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Paper Poker: Texas Hold'em</title>
+  <!-- A gold spade on a dark rounded tile, matching the site logo ("♠ Paper
+       Poker") and gold accent color - inline SVG data URI, no separate
+       asset file needed. -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230d0d1a'/%3E%3Ctext x='50' y='70' font-size='66' text-anchor='middle' fill='%23c9a84c'%3E%E2%99%A0%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet" />
@@ -14,46 +18,112 @@
        app so a notification (coins earned, etc.) is visible regardless of
        which page or modal is currently showing. -->
   <div id="toast-container"></div>
+  <!-- Equipped victory-effect cosmetic plays here on a win (see
+       playVictoryEffect()) - fixed, full-viewport, above everything else. -->
+  <div id="celebration-container"></div>
+
+  <!-- Plays once, right after "Begin Ranked Game" - a short "entering the
+       room" moment before the actual ranked table appears. Stylized (emoji
+       cast + CSS table/lighting), not literal character animation - see
+       playRankedIntro(). -->
+  <div id="ranked-intro-overlay" class="hidden">
+    <div id="ranked-intro-spotlight"></div>
+    <div id="ranked-intro-scene">
+      <div id="ranked-intro-table">
+        <div class="ranked-intro-seat ranked-intro-seat-1"><span class="ranked-intro-avatar">🦒</span><span class="ranked-intro-tie">👔</span></div>
+        <div class="ranked-intro-seat ranked-intro-seat-2"><span class="ranked-intro-avatar">🐧</span><span class="ranked-intro-tie">🎩</span></div>
+        <div class="ranked-intro-seat ranked-intro-seat-3"><span class="ranked-intro-avatar">🦛</span><span class="ranked-intro-tie">👔</span></div>
+        <div class="ranked-intro-seat ranked-intro-seat-4"><span class="ranked-intro-avatar">👽</span><span class="ranked-intro-tie">🎩</span></div>
+        <div id="ranked-intro-walker">🕴️</div>
+      </div>
+    </div>
+    <div id="ranked-intro-caption">Entering Ranked</div>
+  </div>
+
+  <!-- Plays once, right after "Start Hand" on the Configure Bots screen, for
+       any of the 4 standard Unranked difficulties - a short, differently
+       styled+scored flash themed to that difficulty (color/animation/sound
+       all differ), right before the first hand is dealt. See
+       playDifficultyIntro(). data-diff drives all of the actual styling. -->
+  <div id="diff-intro-overlay" class="hidden">
+    <div id="diff-intro-flash"></div>
+    <div id="diff-intro-content">
+      <div id="diff-intro-mascot"></div>
+      <div id="diff-intro-caption"></div>
+    </div>
+  </div>
+
+  <!-- Rumble power-up reveal - plays every time ANY player (human or bot)
+       activates their power-up, visible to everyone at the table so nobody
+       knows what anyone has until they actually use it. Triggered from the
+       'powerUpActivated' socket event - see queuePowerUpReveal(). -->
+  <div id="rumble-reveal-overlay" class="hidden">
+    <div id="rumble-reveal-card">
+      <span id="rpu-reveal-icon"></span>
+      <span id="rpu-reveal-name"></span>
+      <div id="rpu-reveal-swap">
+        <div id="rpu-reveal-swap-old" class="card card-b rpu-swap-card"></div>
+        <span id="rpu-reveal-swap-arrow">→</span>
+        <div id="rpu-reveal-swap-new" class="card card-b rpu-swap-card"></div>
+      </div>
+    </div>
+    <div id="rpu-reveal-caption"></div>
+  </div>
+
+  <!-- Rumble power-up PRIVATE reveal - the activator-only payoff (the exact
+       card X-Ray Vision/Deck Whisperer revealed, or Sleight of Hand's real
+       swap) as a real face-up card popup, not a small corner toast. Never
+       shown to anyone but the activator - see showPrivatePowerUpReveal(). -->
+  <div id="rpu-private-reveal-overlay" class="hidden">
+    <div id="rpu-private-reveal-content">
+      <div id="rpu-private-reveal-heading"></div>
+      <div id="rpu-private-reveal-cards"></div>
+      <div id="rpu-private-reveal-caption"></div>
+      <button id="btn-close-private-reveal" class="sec-btn" type="button">Got it</button>
+    </div>
+  </div>
 
   <!-- ===== SITE SHELL (Play / Range Trainer / Learn) ===== -->
   <div id="site-shell">
     <div id="home-bg"></div>
 
     <nav id="site-nav">
-      <div class="site-nav-cluster site-nav-left">
-        <a id="site-logo" href="#">♠ Paper Poker</a>
-        <div class="site-tabs-side site-tabs-before">
-          <button class="site-tab" data-page="learn">Learn</button>
-          <button class="site-tab" data-page="trainer">Range Trainer</button>
-        </div>
+      <a id="site-logo" href="#">♠ Paper Poker</a>
+      <!-- One flat, evenly-gapped group for every tab, sitting in #site-nav's
+           own grid-template-columns:1fr auto 1fr middle column (see
+           styles.css) so it's centered as a whole regardless of how wide the
+           logo or the logged-in auth cluster are - Play, the middle tab of
+           7, ends up centered right along with it. Simpler and more robust
+           than the earlier design where Learn/Range Trainer sat in their own
+           cluster next to the logo, competing separately for space and
+           nearly colliding with the pivot group at common laptop widths.
+           overflow-x:auto (scrollbar hidden) is a real safety net, not just
+           tightened spacing: if the group is ever too wide for the space
+           available, it scrolls instead of visually breaking. Spins is
+           temporarily removed from here - the wheel isn't paying out the
+           right reward for what it lands on yet; the page/backend are still
+           in place, just not linked from the nav until that's fixed. -->
+      <div id="site-nav-tabs">
+        <button class="site-tab" data-page="learn">Learn</button>
+        <button class="site-tab" data-page="trainer">Range Trainer</button>
+        <button class="site-tab" data-page="rumble">Rumble</button>
+        <button class="site-tab active" data-page="play">Play</button>
+        <button class="site-tab" data-page="tournament">Tournament</button>
+        <button class="site-tab" data-page="multiplayer">Multiplayer</button>
+        <button class="site-tab" data-page="experimental">Experimental</button>
       </div>
-      <!-- Absolutely positioned against #site-nav itself, not laid out
-           relative to the left/right clusters - its own center always lands
-           on the true center of the nav (and therefore the page), regardless
-           of how wide either cluster is (e.g. logging in widens the right
-           cluster substantially). The two clusters sit flush against the
-           nav's own edges rather than stretching to meet in the middle, so
-           there's always genuine empty space there for Play to occupy
-           without a risk of the tab groups visually colliding with it. -->
-      <button class="site-tab active site-tab-pivot" data-page="play">Play</button>
-      <div class="site-nav-cluster site-nav-right">
-        <div class="site-tabs-side site-tabs-after">
-          <button class="site-tab" data-page="multiplayer">Multiplayer</button>
-          <button class="site-tab" data-page="rumble">Rumble</button>
-          <button class="site-tab" data-page="experimental">Experimental</button>
-        </div>
-        <div id="site-nav-actions">
-          <button id="btn-toggle-music-home" class="sec-btn icon-btn" title="Mute/unmute music">🎵</button>
-          <button id="btn-open-auth" class="sec-btn">Log In</button>
-          <div id="auth-user-chip" class="hidden">
-            <button id="btn-open-profile" class="auth-user-profile-btn" type="button" title="View your profile">
-              <span id="auth-user-badge"></span>
-              <span id="auth-user-name"></span>
-            </button>
-            <span id="auth-user-coins" title="Coins">🪙 <span id="auth-user-coins-count">0</span></span>
-            <button id="btn-open-customize-nav" class="sec-btn icon-btn" type="button" title="Customize / Shop">🛒</button>
-            <button id="btn-logout" class="sec-btn icon-btn" title="Log out">⏻</button>
-          </div>
+      <div id="site-nav-actions">
+        <button id="btn-toggle-music-home" class="sec-btn icon-btn" title="Mute/unmute music">🎵</button>
+        <button id="btn-open-auth" class="sec-btn">Log In</button>
+        <div id="auth-user-chip" class="hidden">
+          <button id="btn-open-profile" class="auth-user-profile-btn" type="button" title="View your profile">
+            <span id="auth-user-badge"></span>
+            <span id="auth-user-name"></span>
+          </button>
+          <span id="auth-user-coins" title="Coins">🪙 <span id="auth-user-coins-count">0</span></span>
+          <span class="info-icon" tabindex="0" aria-label="How coins work">i<span class="info-tooltip">Win a hand against bots to earn coins - Easy +2, Medium +4, Hard +6, Expert +8, novelty bots +1. A loss costs 1 coin, any difficulty. Ranked is just for climbing the rank ladder - no coins there.</span></span>
+          <button id="btn-open-customize-nav" class="sec-btn icon-btn" type="button" title="Customize / Shop">🛒</button>
+          <button id="btn-logout" class="sec-btn icon-btn" title="Log out">⏻</button>
         </div>
       </div>
     </nav>
@@ -83,6 +153,12 @@
               <li>Bluffing means you don't always need the best cards to win</li>
             </ul>
           </aside>
+
+          <aside class="play-side-panel home-standalone-info-box home-standalone-info-box-small">
+            <h3>Power-Ups in Poker?</h3>
+            <p>Rumble is regular Texas Hold'em with a twist: everyone gets a secret one-time power-up to use however they like.</p>
+            <button class="home-info-link" id="link-rumble-mode" type="button">Check out Rumble mode!</button>
+          </aside>
         </div>
 
       <div id="home-content">
@@ -99,6 +175,14 @@
           <div class="fg" id="username-fg">
             <label>Username</label>
             <input type="text" id="input-username" placeholder="Your name" maxlength="16" value="You" />
+          </div>
+          <div id="home-rank-hero" class="hidden" role="button" tabindex="0" aria-label="View the full rank ladder">
+            <div id="home-rank-hero-badge"></div>
+            <div id="home-rank-hero-info">
+              <div id="home-rank-hero-label"></div>
+              <div id="home-rank-hero-xp-bar-bg"><div id="home-rank-hero-xp-bar-fill"></div></div>
+              <div id="home-rank-hero-xp-text"></div>
+            </div>
           </div>
           <div id="home-config-row">
             <button id="btn-show-settings" class="sec-btn config-btn">⚙ Game Config</button>
@@ -170,6 +254,7 @@
           </aside>
 
           <aside class="play-side-panel home-standalone-info-box home-standalone-info-box-small">
+            <h3>Practice First</h3>
             <p>New to this? Drill starting hands risk-free before you sit down against a bot.</p>
             <button class="home-info-link" id="link-range-trainer" type="button">Try the → Range Trainer</button>
           </aside>
@@ -259,18 +344,91 @@
 
     <!-- ===== RUMBLE PAGE ===== -->
     <div id="page-rumble" class="site-page hidden">
-      <div id="rumble-placeholder">
-        <h1 class="site-page-title">Rumble</h1>
-        <div id="rumble-wheel-scene" aria-hidden="true">
-          <div id="rumble-wheel"></div>
-          <div id="rumble-wheel-hub"></div>
-          <div id="rumble-wheel-pointer"></div>
-          <div class="rumble-spark rumble-spark-1"></div>
-          <div class="rumble-spark rumble-spark-2"></div>
-          <div class="rumble-spark rumble-spark-3"></div>
+      <div id="rumble-page-content">
+        <div id="rumble-hero">
+          <div id="rumble-wheel-scene" aria-hidden="true">
+            <div id="rumble-wheel"></div>
+            <div id="rumble-wheel-hub"></div>
+            <div id="rumble-wheel-pointer"></div>
+            <div class="rumble-spark rumble-spark-1"></div>
+            <div class="rumble-spark rumble-spark-2"></div>
+            <div class="rumble-spark rumble-spark-3"></div>
+          </div>
+          <h1 class="site-page-title">Rumble</h1>
+          <p id="rumble-hero-tagline">Regular Texas Hold'em, except everyone's secretly armed with a power-up.</p>
+          <button id="btn-play-rumble" class="primary-action-btn rumble-btn" type="button">▶ PLAY RUMBLE</button>
         </div>
-        <p class="mp-heading">Coming Soon</p>
-        <p>A faster, wilder way to play. Every hand deals you a random power-up you can use on your own turn. Full details soon.</p>
+
+        <div id="rumble-explainer">
+          <h2 class="rumble-section-title">What is Rumble?</h2>
+          <ul id="rumble-rules-list">
+            <li>Regular Texas Hold'em against 5 bots, with $1,000 starting stacks for everyone</li>
+            <li>A 30-second shot clock on every turn</li>
+            <li>A Rumble is exactly 5 hands, and whoever has the most chips when it ends wins</li>
+            <li>Everyone is secretly dealt one random power-up at the very start of the Rumble, yours to use once, whenever you want, on your own turn</li>
+            <li>Nobody knows what power-up anyone else has until they actually use it, so watch the center of the table for the reveal</li>
+          </ul>
+
+          <h2 class="rumble-section-title">Power-Ups</h2>
+          <p id="rumble-powerups-hint">One of these will be waiting for you at the table, and the card shown here is exactly what you'll see in-game.</p>
+          <div id="rumble-powerup-grid"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== TOURNAMENT PAGE ===== -->
+    <div id="page-tournament" class="site-page hidden">
+      <div id="tournament-page-content">
+        <!-- Tier selection - shown when the account has no active run -->
+        <div id="tournament-select-view">
+          <h1 class="site-page-title">Tournament</h1>
+          <p id="tournament-multiplayer-note">🔮 Coming soon: multiplayer tournaments against real players. For now it's just you against the bots.</p>
+
+          <div id="tournament-tier-grid"></div>
+
+          <div id="tournament-info-box">
+            <h2 class="rumble-section-title">How Tournaments Work</h2>
+            <ul id="tournament-rules-list">
+              <li>5 rounds of 10 hands each, against 5 bots at $1,000 starting stacks a round</li>
+              <li>Bot difficulty escalates every round: Easy, Medium, Hard, Expert, and finally Master</li>
+              <li>Finish a round with the strictly most chips to advance. An exact tie does not advance</li>
+              <li>Miss 1st place in any round and the tournament ends there, with no refund of your entry fee</li>
+              <li>Win every round and you take home the full payout, plus exclusive cosmetic rewards</li>
+              <li>Local and State are open to everyone - the higher-stakes tiers unlock as your rank climbs</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- Tournament home - shown once an entry fee has been paid, until the run ends -->
+        <div id="tournament-home-view" class="hidden">
+          <div id="tournament-home-hero">
+            <div id="tournament-home-trophy">🏆</div>
+            <h1 class="site-page-title">Tournament</h1>
+            <div id="tournament-home-tier-name"></div>
+          </div>
+          <div id="tournament-progress-track"></div>
+          <div id="tournament-home-actions">
+            <button id="btn-tournament-begin-round" class="primary-action-btn tournament-btn" type="button">Begin Round</button>
+            <button id="btn-tournament-exit" class="sec-btn" type="button">Exit Tournament</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== SPINS PAGE ===== -->
+    <div id="page-spins" class="site-page hidden">
+      <div id="spins-page-content">
+        <h1 class="site-page-title">Spins</h1>
+        <p id="spins-subtitle">25 coins a spin - coins, XP, and a rare jackpot.</p>
+        <div id="spin-wheel-wrap">
+          <div id="spin-sparkles"></div>
+          <div id="spin-wheel-pointer">▼</div>
+          <div id="spin-wheel-svg-wrap"></div>
+          <div id="spin-wheel-hub">🎡</div>
+        </div>
+        <div id="spins-coins-row">🪙 <span id="spins-coins-count">0</span> Coins</div>
+        <button id="btn-spin" class="primary-action-btn tournament-btn" type="button">SPIN (25 🪙)</button>
+        <div id="spin-result" class="hidden"></div>
       </div>
     </div>
 
@@ -377,6 +535,10 @@
           <label>Password (min. 8 characters)</label>
           <input type="password" id="signup-password" minlength="8" autocomplete="new-password" required />
         </div>
+        <label id="signup-legal-agree-row">
+          <input type="checkbox" id="signup-legal-agree" required />
+          <span>I agree to the <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a>.</span>
+        </label>
         <p id="signup-error" class="auth-error hidden"></p>
         <button type="submit" class="auth-submit">Create Account</button>
       </form>
@@ -424,6 +586,41 @@
       <div id="rank-results-xp-bar-bg"><div id="rank-results-xp-bar-fill"></div></div>
       <div id="rank-results-xp-text"></div>
       <button id="btn-rank-results-continue" class="primary-action-btn unranked-btn" type="button">Continue</button>
+      <button id="btn-rank-results-again" class="primary-action-btn ranked-btn hidden" type="button">Play Again</button>
+      <button id="btn-analyze-hand-ranked" class="sec-btn" type="button">Analyze Hand</button>
+    </div>
+  </div>
+
+  <!-- Rumble tournament-complete screen - shown once on the 'rumbleSessionComplete'
+       event, right after the 5th and final hand's own result-overlay. -->
+  <div id="rumble-results-modal" class="hidden">
+    <div id="rumble-results-content">
+      <h2 id="rumble-results-title">Rumble Complete</h2>
+      <div id="rumble-results-standings"></div>
+      <button id="btn-rumble-results-again" class="primary-action-btn rumble-btn" type="button">Play Again</button>
+      <button id="btn-rumble-results-home" class="sec-btn" type="button">Back to Home</button>
+    </div>
+  </div>
+
+  <!-- Tournament: one round's outcome, shown on the 'tournamentRoundComplete'
+       socket event, right after that round's own final-hand result-overlay. -->
+  <div id="tournament-round-result-modal" class="hidden">
+    <div id="tournament-round-result-content">
+      <h2 id="tournament-round-result-title">Round Complete</h2>
+      <p id="tournament-round-result-detail"></p>
+      <div id="tournament-round-result-unlocks" class="hidden"></div>
+      <button id="btn-tournament-round-result-continue" class="primary-action-btn tournament-btn" type="button">Continue</button>
+    </div>
+  </div>
+
+  <!-- Exit-tournament confirmation - the entry fee is explicitly called out
+       as non-refundable so this isn't an easy accidental click. -->
+  <div id="tournament-exit-confirm-modal" class="hidden">
+    <div id="tournament-exit-confirm-content">
+      <h2>Exit Tournament?</h2>
+      <p>Your entry fee will NOT be refunded, and this run will end immediately. Are you sure you want to leave?</p>
+      <button id="btn-tournament-exit-confirm" class="primary-action-btn" type="button">Yes, Exit (Forfeit Entry Fee)</button>
+      <button id="btn-tournament-exit-cancel" class="sec-btn" type="button">Cancel</button>
     </div>
   </div>
 
@@ -440,7 +637,9 @@
         <div id="profile-xp-bar-bg"><div id="profile-xp-bar-fill"></div></div>
         <span id="profile-xp-text"></span>
       </div>
-      <div id="profile-coins-row">🪙 <span id="profile-coins-count">0</span> Coins</div>
+      <div id="profile-coins-row">🪙 <span id="profile-coins-count">0</span> Coins
+        <span class="info-icon" tabindex="0" aria-label="How coins work">i<span class="info-tooltip">Win a hand against bots to earn coins - Easy +2, Medium +4, Hard +6, Expert +8, novelty bots +1. A loss costs 1 coin, any difficulty. Ranked is just for climbing the rank ladder - no coins there.</span></span>
+      </div>
       <p id="profile-scope-hint">Ranked matches only.</p>
       <div id="profile-stats-grid">
         <div class="profile-stat"><span class="profile-stat-label">Hands Played</span><span class="profile-stat-value" id="profile-hands-played">-</span></div>
@@ -452,6 +651,77 @@
         <div class="profile-stat"><span class="profile-stat-label">W$SD %</span><span class="profile-stat-value" id="profile-wsd-pct">-</span></div>
       </div>
       <button id="btn-close-profile" class="sec-btn">Close</button>
+      <button id="btn-open-delete-account" type="button">Delete Account</button>
+    </div>
+  </div>
+
+  <!-- Public profile - opened by clicking any OTHER player's leaderboard row.
+       Same ranked-stat shape as your own profile above, read-only (no coins,
+       no account actions - see /api/users/:id/public-profile). -->
+  <div id="public-profile-modal" class="hidden">
+    <div id="public-profile-content">
+      <div id="public-profile-head">
+        <span id="public-profile-badge"></span>
+        <div id="public-profile-head-titles">
+          <div id="public-profile-name"></div>
+          <div id="public-profile-rank-label"></div>
+        </div>
+      </div>
+      <div id="public-profile-xp-bar-row">
+        <div id="public-profile-xp-bar-bg"><div id="public-profile-xp-bar-fill"></div></div>
+        <span id="public-profile-xp-text"></span>
+      </div>
+      <p id="public-profile-scope-hint">Ranked matches only.</p>
+      <div id="public-profile-stats-grid">
+        <div class="profile-stat"><span class="profile-stat-label">Hands Played</span><span class="profile-stat-value" id="public-profile-hands-played">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Win %</span><span class="profile-stat-value" id="public-profile-win-pct">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Hours Played</span><span class="profile-stat-value" id="public-profile-hours-played">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Net Profit</span><span class="profile-stat-value" id="public-profile-net-profit">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Biggest Pot</span><span class="profile-stat-value" id="public-profile-biggest-pot">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">Biggest Win</span><span class="profile-stat-value" id="public-profile-biggest-win">-</span></div>
+        <div class="profile-stat"><span class="profile-stat-label">W$SD %</span><span class="profile-stat-value" id="public-profile-wsd-pct">-</span></div>
+      </div>
+      <button id="btn-close-public-profile" class="sec-btn">Close</button>
+    </div>
+  </div>
+
+  <!-- The full 16-tier rank ladder - opened by clicking the rank badge on
+       the home page (see home-rank-hero's click handler). Top rank listed
+       first (a literal "what's at the top" view), current tier highlighted
+       and auto-scrolled into view. #rank-ladder-list is the scrollable
+       region; its scrollbar is hidden in CSS while staying scrollable. -->
+  <div id="rank-ladder-modal" class="hidden">
+    <div id="rank-ladder-content">
+      <h2 id="rank-ladder-title">Rank Ladder</h2>
+      <p id="rank-ladder-subtitle">Climb by playing Ranked. Higher tiers unlock bots, cosmetics, and higher-stakes tournaments.</p>
+      <div id="rank-ladder-list"></div>
+      <button id="btn-close-rank-ladder" class="sec-btn">Close</button>
+    </div>
+  </div>
+
+  <div id="delete-account-modal" class="hidden">
+    <div id="delete-account-content">
+      <h2>Delete Account</h2>
+      <p id="delete-account-warning">This is permanent and can't be undone. Deleting your account removes:</p>
+      <ul id="delete-account-loss-list">
+        <li>Your Coins balance</li>
+        <li>Your rank and XP progress</li>
+        <li>Unlocked card backs and table felts</li>
+        <li>Your ranked stats and leaderboard history</li>
+      </ul>
+      <form id="delete-account-form">
+        <div class="fg">
+          <label>Enter your password to confirm</label>
+          <input type="password" id="delete-account-password" autocomplete="current-password" required />
+        </div>
+        <label id="delete-account-agree-row">
+          <input type="checkbox" id="delete-account-agree" required />
+          <span>I understand this is permanent and I will lose everything listed above.</span>
+        </label>
+        <p id="delete-account-error" class="auth-error hidden"></p>
+        <button type="submit" id="btn-confirm-delete-account">Permanently Delete My Account</button>
+        <button type="button" id="btn-cancel-delete-account" class="sec-btn">Cancel</button>
+      </form>
     </div>
   </div>
 
@@ -459,13 +729,31 @@
     <div id="customize-content">
       <h2>Customize</h2>
       <div id="customize-coins-row">🪙 <span id="customize-coins-count">0</span> Coins</div>
-      <div class="customize-section">
-        <div class="customize-section-title">Card Backs</div>
-        <div id="customize-cardback-grid" class="customize-grid"></div>
+      <div id="customize-tabs">
+        <button class="customize-tab active" data-category="cardBack" type="button">Card Backs</button>
+        <button class="customize-tab" data-category="feltColor" type="button">Table Felt</button>
+        <button class="customize-tab" data-category="tableTheme" type="button">Felt Patterns</button>
+        <button class="customize-tab" data-category="rippleColor" type="button">Click Ripple</button>
+        <button class="customize-tab" data-category="nameFlair" type="button">Name Flair</button>
+        <button class="customize-tab" data-category="victoryEffect" type="button">Victory Effect</button>
       </div>
-      <div class="customize-section">
-        <div class="customize-section-title">Table Felt</div>
-        <div id="customize-felt-grid" class="customize-grid"></div>
+      <div class="customize-section" data-category="cardBack">
+        <div id="customize-cardBack-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section hidden" data-category="feltColor">
+        <div id="customize-feltColor-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section hidden" data-category="tableTheme">
+        <div id="customize-tableTheme-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section hidden" data-category="rippleColor">
+        <div id="customize-rippleColor-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section hidden" data-category="nameFlair">
+        <div id="customize-nameFlair-grid" class="customize-grid"></div>
+      </div>
+      <div class="customize-section hidden" data-category="victoryEffect">
+        <div id="customize-victoryEffect-grid" class="customize-grid"></div>
       </div>
       <button id="btn-close-customize" class="sec-btn" type="button">Close</button>
     </div>
@@ -675,6 +963,8 @@
         <span id="hu"></span>
         <span id="hm">Easy</span>
         <span id="hranked" class="hidden">🏆 Ranked</span>
+        <span id="hrumble" class="hidden">🎲 Rumble</span>
+        <span id="htournament" class="hidden">🏅 Tournament</span>
         <span id="hroom" class="hidden"></span>
       </div>
       <div id="hc">
@@ -770,6 +1060,21 @@
               <circle id="ttr-progress" class="ttr-progress" cx="22" cy="22" r="18"></circle>
             </svg>
             <span id="ttr-text"></span>
+          </div>
+
+          <!-- Rumble: the player's own secret power-up - visible only to them,
+               same card visual as the Rumble explainer page grid. Hidden
+               outside Rumble games or before a power-up's been assigned. -->
+          <div id="rumble-powerup-panel" class="hidden">
+            <div id="rumble-powerup-card" class="rpu-card">
+              <div class="rpu-card-top">
+                <span id="rpu-icon" class="rpu-card-icon"></span>
+                <span id="rpu-name" class="rpu-card-name"></span>
+              </div>
+              <p id="rpu-desc" class="rpu-card-desc"></p>
+              <div id="rumble-powerup-target-hint" class="hidden">Click an opponent's seat to choose your target</div>
+              <button id="btn-activate-powerup" class="rpu-activate-btn" type="button">Activate</button>
+            </div>
           </div>
         </div>
 
@@ -890,9 +1195,44 @@
     let timerTotal = 0;
     let balanceHistory = [];
     let evHistory = [];
+    // ===== Rumble state (client-side UI only - the server is the sole
+    // authority on the actual power-up assignment/usage) =====
+    let rumbleTargetingActive = false; // true while the player has clicked Activate on a needs-target power-up and is waiting to click an opponent's seat
+    let pendingRumbleSessionComplete = null; // cached the same way pendingSessionComplete (ranked) is, consumed on the next 'handComplete'
+    let rumbleRevealQueue = [];
+    let rumbleRevealShowing = false;
 
     // ===== CATEGORY constants (mirror server) =====
     const CATEGORY = { HIGH_CARD:0, ONE_PAIR:1, TWO_PAIR:2, THREE_OF_A_KIND:3, STRAIGHT:4, FLUSH:5, FULL_HOUSE:6, FOUR_OF_A_KIND:7, STRAIGHT_FLUSH:8 };
+
+    // ===== Rumble power-ups (display-only client mirror of src/powerUps.js's
+    // POWER_UPS_CATALOG - used to render the explainer page's card grid. The
+    // in-game secret power-up card is never built from this; it always comes
+    // straight from the server via state.yourPowerUp, since which power-up
+    // YOU actually got is server-assigned. =====
+    const RUMBLE_POWERUP_CATALOG = [
+      { key: "xrayVision", name: "X-Ray Vision", icon: "👁️", category: "Information & Reconnaissance", description: "Reveal one hidden card from an opponent of your choice." },
+      { key: "deckWhisperer", name: "Deck Whisperer", icon: "🔮", category: "Information & Reconnaissance", description: "Secretly look at the next card to be dealt from the deck." },
+      { key: "mindReader", name: "Mind Reader", icon: "🧠", category: "Information & Reconnaissance", description: "Reveal both hidden cards from an opponent of your choice." },
+      { key: "sleightOfHand", name: "Sleight of Hand", icon: "🃏", category: "Card & Deck Manipulation", description: "Swap one of your hole cards with a random card from the top of the deck." },
+      { key: "mulligan", name: "Mulligan", icon: "🔄", category: "Card & Deck Manipulation", description: "Discard both of your hole cards and draw two fresh ones from the deck." },
+      { key: "freakyFriday", name: "Freaky Friday", icon: "🔀", category: "Card & Deck Manipulation", description: "Swap your entire hand with an opponent of your choice. No take-backs." },
+      { key: "insurance", name: "Insurance", icon: "💰", category: "Pot & Betting Mechanics", description: "If you lose this hand after going all-in or calling a bet worth half your stack, reclaim 50% of your lost chips." },
+      { key: "bountyHunter", name: "Bounty Hunter", icon: "🏹", category: "Pot & Betting Mechanics", description: "If you win this hand, receive an extra 25% bonus payout from the house." },
+      { key: "freezeSilence", name: "Freeze / Silence", icon: "❄️", category: "Pot & Betting Mechanics", description: "Force a targeted player to check or call for the rest of this betting round. They can't raise or fold." },
+      { key: "deadmansFold", name: "Deadman's Fold", icon: "💀", category: "Pot & Betting Mechanics", description: "The next time you fold this hand, get every chip you put in back from the house." },
+    ];
+
+    function rpuCardHTML(def) {
+      return '<div class="rpu-card">' +
+        '<div class="rpu-card-top"><span class="rpu-card-icon">' + def.icon + '</span><span class="rpu-card-name">' + escapeHtml(def.name) + '</span></div>' +
+        '<p class="rpu-card-desc">' + escapeHtml(def.description) + '</p>' +
+        '</div>';
+    }
+
+    document.getElementById('rumble-powerup-grid').innerHTML = RUMBLE_POWERUP_CATALOG.map((def) =>
+      '<div class="rpu-grid-cell">' + rpuCardHTML(def) + '<span class="rpu-grid-category">' + escapeHtml(def.category) + '</span></div>'
+    ).join('');
 
     // Escapes HTML metacharacters before any user-controllable string
     // (display names - typed freely at signup or when joining a room - hand
@@ -961,14 +1301,70 @@
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     let audioCtx = null;
     function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); }
+    // Default site-wide sound-effect level - a flat multiplier applied on
+    // top of every effect's own individually-tuned volume (below), rather
+    // than baking it into each literal, so the relative mix between effects
+    // (a bot-turn tick vs. a win fanfare) stays the same while everything
+    // scales together. 1.25 = 25% louder than each sound's own written
+    // baseline.
+    const sfxVolumeScale = 1.25;
     function beep(f,d,v=0.15,t='sine') {
-      try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
+      try { ensureAudio(); const o=audioCtx.createOscillator(), g=audioCtx.createGain(); o.type=t; o.frequency.value=f; g.gain.value=v*sfxVolumeScale; g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime+d); o.connect(g); g.connect(audioCtx.destination); o.start(); o.stop(audioCtx.currentTime+d); } catch(e) {}
     }
-    function sf() { beep(200,0.15,0.11,'sawtooth'); }
-    function sch() { beep(600,0.08,0.1); }
-    function sca() { beep(440,0.1,0.11); }
-    function sbet() { beep(330,0.12,0.13,'triangle'); }
-    function sra() { beep(550,0.1,0.13,'square'); setTimeout(()=>beep(660,0.1,0.1,'square'),80); }
+    // One shared click sound for every clickable control across the site
+    // (nav tabs, difficulty/experimental bot tiles, in-game action buttons,
+    // general buttons) - a short, deep, wood-block-style knock rather than
+    // an electronic beep. sf/sch/sca/sbet/sra below just route to this now,
+    // kept as separate names purely so their call sites still read clearly.
+    function sclick() {
+      try {
+        ensureAudio();
+        const t0 = audioCtx.currentTime;
+        const o = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(190, t0);
+        o.frequency.exponentialRampToValueAtTime(85, t0 + 0.07);
+        g.gain.setValueAtTime(0.0001, t0);
+        g.gain.linearRampToValueAtTime(0.32 * sfxVolumeScale, t0 + 0.005);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+        o.connect(g);
+        g.connect(audioCtx.destination);
+        o.start(t0);
+        o.stop(t0 + 0.1);
+      } catch (e) {}
+    }
+    function sf() { sclick(); }
+    function sch() { sclick(); }
+    function sca() { sclick(); }
+    function sbet() { sclick(); }
+    function sra() { sclick(); }
+
+    // Cosmetic click-ripple (colored via the equipped rippleColor, applied
+    // to <html data-ripple="..."> in applyEquippedCosmetics) - shown at the
+    // click point regardless of which button it was.
+    function spawnClickRipple(x, y) {
+      const ripple = document.createElement('div');
+      ripple.className = 'click-ripple';
+      ripple.style.left = x + 'px';
+      ripple.style.top = y + 'px';
+      document.body.appendChild(ripple);
+      setTimeout(() => ripple.remove(), 650);
+    }
+
+    // Delegated so it covers every button added now or later, including
+    // ones rendered dynamically (customize shop items, street tabs, etc.) -
+    // no need to wire each one individually. The 5 in-game action buttons
+    // are skipped for the SOUND only (their own handlers already call
+    // sclick() via sf/sch/sca/sbet/sra above, so this avoids playing it
+    // twice per click) - the ripple still shows for them like everywhere else.
+    document.addEventListener('click', (e) => {
+      const el = e.target.closest('button, .diff-box');
+      if (!el) return;
+      const isActionButton = el.closest('#btn-fold, #btn-check, #btn-call, #btn-bet, #btn-raise');
+      if (!isActionButton) sclick();
+      spawnClickRipple(e.clientX, e.clientY);
+    });
     // A fuller triumphant arpeggio (C5-E5-G5-C6) than a plain 3-note chime -
     // the held, louder top note is what sells the "upbeat momentum" on a win.
     function swin() {
@@ -982,6 +1378,165 @@
       setTimeout(()=>beep(311,0.24,0.13,'sawtooth'),360); setTimeout(()=>beep(261,0.4,0.13,'sawtooth'),540);
     }
     function sbotTurn() { beep(350,0.06,0.06,'triangle'); setTimeout(()=>beep(400,0.06,0.06,'triangle'),80); }
+    // A big, bright ascending fanfare for the ranked-entry intro (see
+    // playRankedIntro) - a full 5-note rising arpeggio (A4-C#5-E5-A5-C#6),
+    // deliberately loud so it reads as a real "occasion" moment, held longer
+    // on the top note for a finale feel. Each of the first 4 notes also
+    // pairs with one seated character hopping, sweeping clockwise around
+    // the table (top-left, top-right, right, bottom-left) in time with the
+    // note; the held finale note is the whole table hopping together.
+    const RANKED_INTRO_NOTES = [
+      { delay: 0,   freq: 440,  dur: 0.18, vol: 0.38, seats: ['1'] },
+      { delay: 210, freq: 554,  dur: 0.18, vol: 0.38, seats: ['2'] },
+      { delay: 420, freq: 659,  dur: 0.18, vol: 0.4,  seats: ['4'] },
+      { delay: 630, freq: 880,  dur: 0.24, vol: 0.42, seats: ['3'] },
+      { delay: 900, freq: 1108, dur: 0.5,  vol: 0.45, seats: ['1', '2', '3', '4'] },
+    ];
+    function srankedintro() {
+      RANKED_INTRO_NOTES.forEach(({ delay, freq, dur, vol, seats }) => {
+        setTimeout(() => {
+          beep(freq, dur, vol, 'triangle');
+          seats.forEach((n) => {
+            const seat = document.querySelector('.ranked-intro-seat-' + n);
+            if (!seat) return;
+            // Force the animation to restart even if this exact seat/class
+            // combo already ran earlier in the same sequence (every seat
+            // jumps twice - once on its own note, once again on the group
+            // finale) - classList.add() alone is a no-op when the class is
+            // already present, so a plain re-add wouldn't replay it.
+            seat.classList.remove('jump');
+            void seat.offsetWidth;
+            seat.classList.add('jump');
+          });
+        }, delay);
+      });
+    }
+
+    // ===== Per-difficulty "entering the table" intro (Unranked only - see
+    // playDifficultyIntro) - a short, differently-styled flash for each of
+    // the 4 standard difficulties, playing right after "Start Hand" is
+    // confirmed on the Configure Bots screen, purely a visual/audio flourish
+    // layered on top (nothing about the actual game start waits on it).
+    // Each difficulty gets its own short "signature" sound rather than
+    // reusing one sound with different pitches, so they're recognizably
+    // distinct even with your eyes closed: a bright rising 2-note chime for
+    // Easy, a steady repeated ping for Medium, a harsh descending 2-note
+    // sting for Hard, and a small 3-note ascending flourish for Expert.
+    function sDiffIntro(difficulty) {
+      if (difficulty === 'easy') {
+        beep(523, 0.14, 0.16, 'sine');
+        setTimeout(() => beep(659, 0.22, 0.16, 'sine'), 110);
+      } else if (difficulty === 'medium') {
+        beep(392, 0.15, 0.15, 'triangle');
+        setTimeout(() => beep(392, 0.18, 0.15, 'triangle'), 170);
+      } else if (difficulty === 'hard') {
+        beep(220, 0.12, 0.22, 'sawtooth');
+        setTimeout(() => beep(147, 0.24, 0.22, 'sawtooth'), 90);
+      } else if (difficulty === 'expert') {
+        beep(440, 0.11, 0.13, 'sine');
+        setTimeout(() => beep(554, 0.11, 0.13, 'sine'), 100);
+        setTimeout(() => beep(659, 0.26, 0.15, 'sine'), 200);
+      } else if (difficulty === 'rumble') {
+        // A fast ascending electric "power-up charge" run, square-wave for
+        // an arcade feel - distinct from every difficulty's softer sine/
+        // triangle/sawtooth tones.
+        [330, 415, 523, 659, 830].forEach((f, i) => setTimeout(() => beep(f, 0.08, 0.14, 'square'), i * 55));
+      } else if (difficulty === 'tournament') {
+        // A short triumphant 3-note fanfare - grander/slower than Expert's
+        // flourish, distinct from Rumble's chaotic arcade run.
+        beep(392, 0.12, 0.15, 'triangle');
+        setTimeout(() => beep(494, 0.12, 0.15, 'triangle'), 120);
+        setTimeout(() => beep(587, 0.32, 0.18, 'triangle'), 240);
+      }
+    }
+    const DIFF_INTRO_CAPTIONS = {
+      easy: 'Entering the Easy Table',
+      medium: 'Entering the Medium Table',
+      hard: 'Entering the Hard Table',
+      expert: 'Entering the Expert Table',
+    };
+    function playDifficultyIntro(difficulty) {
+      if (!DIFF_INTRO_CAPTIONS[difficulty]) return; // experimental personalities/ranked/rumble all have their own entry flow (or none) - this is Unranked-only
+      const overlay = document.getElementById('diff-intro-overlay');
+      overlay.setAttribute('data-diff', difficulty);
+      document.getElementById('diff-intro-mascot').innerHTML = window.BotMascots ? window.BotMascots.render(difficulty, 96) : '';
+      document.getElementById('diff-intro-caption').textContent = DIFF_INTRO_CAPTIONS[difficulty];
+      overlay.classList.remove('hidden');
+      setTimeout(() => sDiffIntro(difficulty), 100);
+      setTimeout(() => overlay.classList.add('hidden'), 2300);
+    }
+
+    // Rumble's own entry intro, right after "Play Rumble" - reuses the same
+    // #diff-intro-overlay infrastructure as the per-difficulty intros above
+    // (data-diff="rumble" drives its own cyan flash + shake in CSS) but with
+    // a plain dice emoji instead of a difficulty mascot, and - unlike the
+    // difficulty intros, which play AFTER the table is already switched in -
+    // this one plays first, over the still-visible Rumble landing page, then
+    // triggers the actual switch to the live table partway through (same
+    // "trigger the real work before the fade-out visually begins" timing
+    // playRankedIntro uses, so the stale landing page never flashes through).
+    function playRumbleIntro(onComplete) {
+      const overlay = document.getElementById('diff-intro-overlay');
+      overlay.setAttribute('data-diff', 'rumble');
+      document.getElementById('diff-intro-mascot').innerHTML = '<span class="diff-intro-emoji">🎲</span>';
+      document.getElementById('diff-intro-caption').textContent = 'Entering Rumble';
+      overlay.classList.remove('hidden');
+      setTimeout(() => sDiffIntro('rumble'), 100);
+      setTimeout(onComplete, 1700);
+      setTimeout(() => overlay.classList.add('hidden'), 2400);
+    }
+
+    // Tournament's own round-start curtain, reusing the same
+    // #diff-intro-overlay infrastructure (data-diff="tournament" drives its
+    // own violet curtain-wipe in CSS, adapted from Expert's silver one) as
+    // every themed intro above. Same timing convention as playRumbleIntro:
+    // plays over the still-visible Tournament home screen, then triggers the
+    // real switch to the live table partway through (before the overlay
+    // itself fades out), so the stale home screen never flashes through once
+    // the curtains part.
+    function playTournamentRoundIntro(roundNumber, onComplete) {
+      const overlay = document.getElementById('diff-intro-overlay');
+      overlay.setAttribute('data-diff', 'tournament');
+      document.getElementById('diff-intro-mascot').innerHTML = '<span class="diff-intro-emoji">🏆</span>';
+      document.getElementById('diff-intro-caption').textContent = 'Beginning Round ' + roundNumber + '...';
+      overlay.classList.remove('hidden');
+      setTimeout(() => sDiffIntro('tournament'), 100);
+      setTimeout(onComplete, 1700);
+      setTimeout(() => overlay.classList.add('hidden'), 2400);
+    }
+
+    // Plays the equipped victoryEffect cosmetic on a win, reusing the
+    // existing #celebration-container/.celeb-particle falling-particle
+    // system (colored dots for Confetti Burst, an emoji glyph for the
+    // others) rather than a second parallel particle system.
+    const VICTORY_EFFECT_GLYPHS = {
+      coinShower: ['🪙'],
+      fireworks: ['🎆', '✨'],
+      iceBurst: ['❄️', '💎'],
+      starShower: ['🌠', '⭐'],
+      lightningStrike: ['⚡', '💥'],
+      goldenGlow: ['✨'],
+      royalFanfare: ['👑', '✨'],
+    };
+    const VICTORY_EFFECT_DOT_COLORS = ['#ff6b6b', '#ffd166', '#06d6a0', '#4d96ff', '#b28dff', '#c9a84c'];
+    function playVictoryEffect() {
+      const effect = (currentUser && currentUser.equippedVictoryEffect) || 'none';
+      if (effect === 'none') return;
+      const container = document.getElementById('celebration-container');
+      if (!container) return;
+      const glyphs = VICTORY_EFFECT_GLYPHS[effect] || null; // confetti falls back to colored dots
+      for (let i = 0; i < 26; i++) {
+        const p = document.createElement('div');
+        p.className = glyphs ? 'celeb-particle celeb-particle-emoji' : 'celeb-particle';
+        if (glyphs) p.textContent = glyphs[i % glyphs.length];
+        else p.style.background = VICTORY_EFFECT_DOT_COLORS[i % VICTORY_EFFECT_DOT_COLORS.length];
+        p.style.left = Math.random() * 100 + '%';
+        p.style.top = '-20px';
+        p.style.animationDelay = (Math.random() * 0.5) + 's';
+        container.appendChild(p);
+        setTimeout(() => p.remove(), 3200);
+      }
+    }
 
     // ===== Background Music =====
     // Two tracks: a homepage/site-shell track (plays continuously across the
@@ -989,7 +1544,7 @@
     // and a game track that swaps in once #app (the live table) is visible -
     // covers solo/ranked-vs-bots and, later, private rooms with friends alike,
     // since both are just "the live table is showing" from this code's view.
-    let musicVolume = 0.5;
+    let musicVolume = 0.375; // 25% lower than the original 0.5 default
     let musicMuted = false;
     let musicStarted = false;
     // One continuous track for the whole site - homepage and in-game alike -
@@ -1189,16 +1744,108 @@
     // Select Easy by default
     document.querySelector('.diff-box[data-diff="easy"]').classList.add('selected');
 
+    // Clicking into blank space (anywhere that isn't a difficulty box or
+    // some other control) reverts the difficulty-tinted background back to
+    // its neutral black default - independent of whichever box still shows
+    // as "selected" for actually starting a game.
+    document.getElementById('page-play').addEventListener('click', (e) => {
+      const interactive = e.target.closest('button, a, input, select, textarea, .diff-box, [role="button"]');
+      if (interactive) return;
+      document.getElementById('site-shell').removeAttribute('data-diff');
+    });
+
+    // ===== Background mouse light effect =====
+    // A soft spotlight, plus a subtle parallax shift of the suit-tile
+    // texture layer, that follows the cursor - both driven by CSS custom
+    // properties on #home-bg so the "luxury tile" background feels a
+    // little alive rather than static. rAF-throttled so a fast mouse
+    // doesn't spam layout/paint work.
+    (function setupHomeBgMouseLight() {
+      const homeBg = document.getElementById('home-bg');
+      if (!homeBg) return;
+      let pending = null;
+      document.addEventListener('mousemove', (e) => {
+        if (pending) return;
+        pending = requestAnimationFrame(() => {
+          pending = null;
+          const rect = homeBg.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+          const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+          homeBg.style.setProperty('--mouse-x', xPct + '%');
+          homeBg.style.setProperty('--mouse-y', yPct + '%');
+          // A few px of parallax shift for the suit-tile layer, centered on
+          // the middle of the viewport.
+          homeBg.style.setProperty('--parallax-x', ((xPct - 50) / 50) * 12 + 'px');
+          homeBg.style.setProperty('--parallax-y', ((yPct - 50) / 50) * 12 + 'px');
+          homeBg.classList.add('mouse-active');
+        });
+      });
+      document.addEventListener('mouseleave', () => homeBg.classList.remove('mouse-active'));
+    })();
+
     // ===== Experimental Bots =====
+    // Rank-gated (see src/rankUnlocks.js) - a locked box shows an overlay and
+    // can't be selected client-side, and "Start Game" is disabled whenever
+    // the current selection is locked (or nothing valid is selected yet) so
+    // it's never possible to launch a locked bot at all - not even via the
+    // page's hardcoded "drunk" default, which used to stay selected right
+    // through a lock. The real enforcement is still server-side too (the
+    // updateSettings socket handler coerces a locked request down to Easy
+    // regardless of what the client claims), but that used to just silently
+    // swap in an Easy game while the UI kept showing the locked bot's name -
+    // confusing, since nothing told the player their choice didn't apply.
+    function renderExperimentalBotLocks() {
+      let anyUnlocked = false;
+      document.querySelectorAll('.exp-box').forEach((box) => {
+        const key = box.dataset.diff;
+        const info = experimentalBotsInfo[key];
+        const locked = !(info && info.unlocked);
+        box.classList.toggle('locked', locked);
+        if (!locked) anyUnlocked = true;
+        let lockEl = box.querySelector('.exp-box-lock');
+        if (locked) {
+          if (!lockEl) {
+            lockEl = document.createElement('div');
+            lockEl.className = 'exp-box-lock';
+            box.appendChild(lockEl);
+          }
+          lockEl.textContent = !currentUser
+            ? '🔒 Sign in to unlock'
+            : (info && info.unlockRank ? '🔒 Unlocks at ' + info.unlockRank : '🔒 Locked');
+        } else if (lockEl) {
+          lockEl.remove();
+        }
+      });
+
+      // If whatever's currently selected just became locked (or nothing's
+      // selected yet, e.g. before /api/me has resolved), fall back to the
+      // first unlocked box instead of leaving a locked one selected.
+      const selectedBox = document.querySelector('.exp-box.selected');
+      if (!selectedBox || selectedBox.classList.contains('locked')) {
+        document.querySelectorAll('.exp-box').forEach((b) => b.classList.remove('selected'));
+        const firstUnlocked = Array.from(document.querySelectorAll('.exp-box')).find((b) => !b.classList.contains('locked'));
+        if (firstUnlocked) {
+          firstUnlocked.classList.add('selected');
+          document.getElementById('input-experimental-difficulty').value = firstUnlocked.dataset.diff;
+        }
+      }
+
+      const startBtn = document.getElementById('btn-start-experimental');
+      startBtn.disabled = !anyUnlocked;
+      startBtn.title = anyUnlocked ? '' : 'Reach a higher rank to unlock an experimental bot.';
+    }
     document.querySelectorAll('.exp-box').forEach(box => {
       box.addEventListener('click', () => {
+        if (box.classList.contains('locked')) return;
         document.querySelectorAll('.exp-box').forEach(b => b.classList.remove('selected'));
         box.classList.add('selected');
         document.getElementById('input-experimental-difficulty').value = box.dataset.diff;
       });
     });
-    document.querySelector('.exp-box[data-diff="drunk"]').classList.add('selected');
     document.getElementById('btn-start-experimental').addEventListener('click', () => {
+      const selectedBox = document.querySelector('.exp-box.selected');
+      if (!selectedBox || selectedBox.classList.contains('locked')) return; // belt-and-suspenders - the button is disabled in this state anyway
       document.getElementById('input-difficulty').value = document.getElementById('input-experimental-difficulty').value;
       setRankedModeUI(false);
       startGameFlow();
@@ -1208,6 +1855,11 @@
     function showSitePage(pageName) {
       document.querySelectorAll('.site-tab').forEach(t => t.classList.toggle('active', t.dataset.page === pageName));
       document.querySelectorAll('.site-page').forEach(p => p.classList.toggle('hidden', p.id !== 'page-' + pageName));
+      // Refreshed on every visit (tab click, a link elsewhere, or navigating
+      // back here after a round/exit) rather than once on load, since the
+      // active-run state can change from outside this page entirely.
+      if (pageName === 'tournament') loadTournamentStatus();
+      if (pageName === 'spins') loadSpinStatus();
     }
     document.querySelectorAll('.site-tab').forEach(tab => {
       tab.addEventListener('click', () => showSitePage(tab.dataset.page));
@@ -1218,10 +1870,20 @@
     });
     document.getElementById('link-learn-more').addEventListener('click', () => showSitePage('learn'));
     document.getElementById('link-range-trainer').addEventListener('click', () => showSitePage('trainer'));
+    document.getElementById('link-rumble-mode').addEventListener('click', () => showSitePage('rumble'));
 
     // ===== Accounts (login/signup) =====
     let currentUser = null;
     let rankedMode = false;
+    // key -> { unlocked, unlockRank } for each of the 5 experimental bot
+    // personalities, from GET /api/me - a guest or an under-ranked account
+    // sees every entry locked. The server-side updateSettings gate is what
+    // actually enforces this; this is display-only.
+    let experimentalBotsInfo = {};
+    // The full 16-tier RANK_TIERS ladder, from GET /api/me - static config,
+    // safe to cache for the life of the page rather than re-fetching every
+    // time the rank ladder modal opens.
+    let rankTiersInfo = [];
 
     function setRankedModeUI(ranked) {
       rankedMode = ranked;
@@ -1248,31 +1910,119 @@
       const appEl = document.getElementById('app');
       appEl.setAttribute('data-cardback', (currentUser && currentUser.equippedCardBack) || 'classic');
       appEl.setAttribute('data-felt', (currentUser && currentUser.equippedFeltColor) || 'green');
+      appEl.setAttribute('data-theme', (currentUser && currentUser.equippedTableTheme) || 'plain');
+      document.documentElement.setAttribute('data-ripple', (currentUser && currentUser.equippedRippleColor) || 'white');
+      renderNameFlairEverywhere();
     }
+
+    // Whichever nameFlair the account has equipped (see
+    // COSMETICS_CATALOG.nameFlair) recolors the display name itself (solid
+    // color for the simple flairs, an animated gradient for "Legend" and
+    // every tournament-exclusive veteran flair - see .name-flair's CSS) -
+    // "none" (the free default) renders the name unstyled. This list only
+    // needs to know which keys are real flairs, not their display names
+    // anymore (nothing renders the word itself next to the name).
+    const NAME_FLAIR_KEYS = new Set([
+      'sapphire', 'ember', 'jade', 'crimson', 'silver', 'gold', 'addict', 'star', 'legend',
+      'localLegend', 'stateChampion', 'nationalHero', 'worldChampion',
+      'highRoller', 'aLister', 'undergroundLegend',
+    ]);
+    function nameFlairHTML(name) {
+      const escaped = escapeHtml(name);
+      const flair = currentUser && currentUser.equippedNameFlair;
+      if (!flair || flair === 'none' || !NAME_FLAIR_KEYS.has(flair)) return escaped;
+      return '<span class="name-flair" data-flair="' + flair + '">' + escaped + '</span>';
+    }
+    function renderNameFlairEverywhere() {
+      if (!currentUser) return;
+      const headerEl = document.getElementById('auth-user-name');
+      if (headerEl) headerEl.innerHTML = nameFlairHTML(currentUser.displayName);
+    }
+
+    // A logged-in player already has a fixed display name on their account -
+    // there's nothing to type, so the home screen swaps the username input
+    // for a big rank badge + XP progress instead, in the same spot.
+    function renderHomeRankHero() {
+      if (!currentUser || !currentUser.rank) return;
+      const badgeEl = document.getElementById('home-rank-hero-badge');
+      if (window.RankBadges) badgeEl.innerHTML = window.RankBadges.render(currentUser.rank.key, currentUser.rank.sub, 72);
+      document.getElementById('home-rank-hero-label').textContent = currentUser.rank.label;
+      const xpIntoTier = currentUser.totalXp - currentUser.rank.threshold;
+      const xpSpan = currentUser.rank.nextThreshold != null ? currentUser.rank.nextThreshold - currentUser.rank.threshold : null;
+      const progressPct = xpSpan ? Math.min(100, Math.max(0, (xpIntoTier / xpSpan) * 100)) : 100;
+      document.getElementById('home-rank-hero-xp-bar-fill').style.width = progressPct + '%';
+      document.getElementById('home-rank-hero-xp-text').textContent = currentUser.rank.nextThreshold != null
+        ? (currentUser.rank.nextThreshold - currentUser.totalXp) + ' XP to ' + currentUser.rank.nextLabel
+        : currentUser.totalXp + ' XP - top rank reached';
+    }
+
+    // One row of the rank ladder modal - reached/current tiers are lit up,
+    // tiers still ahead are dimmed, matching the locked/unlocked visual
+    // language already used elsewhere (cosmetics shop, tournament tiers).
+    function rankLadderRowHTML(tier, index, currentTierIndex) {
+      const isCurrent = index === currentTierIndex;
+      const isReached = index <= currentTierIndex;
+      const badge = window.RankBadges ? window.RankBadges.render(tier.key, tier.sub, 40) : '';
+      return '<div class="rank-ladder-row' + (isCurrent ? ' rank-ladder-row-current' : '') + (isReached ? ' rank-ladder-row-reached' : '') + '" data-tier-index="' + index + '">' +
+        '<div class="rank-ladder-row-badge">' + badge + '</div>' +
+        '<div class="rank-ladder-row-info">' +
+          '<div class="rank-ladder-row-label">' + escapeHtml(tier.label) + '</div>' +
+          '<div class="rank-ladder-row-threshold">' + tier.threshold.toLocaleString() + ' XP</div>' +
+        '</div>' +
+        (isCurrent ? '<div class="rank-ladder-row-you">You are here</div>' : '') +
+      '</div>';
+    }
+
+    // The full 16-tier ladder, top rank first (a literal "what's at the
+    // top" view) - opened by clicking the home page's rank badge/hero.
+    function openRankLadderModal() {
+      if (!currentUser || !currentUser.rank || !rankTiersInfo.length) return;
+      const currentTierIndex = rankTiersInfo.findIndex((t) => t.key === currentUser.rank.key && t.sub === currentUser.rank.sub);
+      const listEl = document.getElementById('rank-ladder-list');
+      listEl.innerHTML = rankTiersInfo
+        .map((t, i) => rankLadderRowHTML(t, i, currentTierIndex))
+        .reverse()
+        .join('');
+      document.getElementById('rank-ladder-modal').classList.remove('hidden');
+      requestAnimationFrame(() => {
+        const currentRow = listEl.querySelector('.rank-ladder-row-current');
+        if (currentRow) currentRow.scrollIntoView({ block: 'center' });
+      });
+    }
+    document.getElementById('home-rank-hero').addEventListener('click', openRankLadderModal);
+    document.getElementById('home-rank-hero').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRankLadderModal(); }
+    });
+    document.getElementById('btn-close-rank-ladder').addEventListener('click', () => {
+      document.getElementById('rank-ladder-modal').classList.add('hidden');
+    });
 
     function updateAuthUI() {
       applyEquippedCosmetics();
       document.getElementById('btn-open-auth').classList.toggle('hidden', !!currentUser);
       document.getElementById('auth-user-chip').classList.toggle('hidden', !currentUser);
       document.getElementById('guest-save-progress-hint').classList.toggle('hidden', !!currentUser);
+      document.getElementById('username-fg').classList.toggle('hidden', !!currentUser);
+      document.getElementById('home-rank-hero').classList.toggle('hidden', !currentUser);
       // The in-game header's own username (top-left, "Name (You)") doubles as
       // a profile shortcut while logged in - there's no separate nav visible
       // once a hand is in progress. Guests have no profile to show, so it
       // stays plain text for them.
       document.getElementById('hu').classList.toggle('hu-clickable', !!currentUser);
       if (currentUser) {
-        document.getElementById('auth-user-name').textContent = currentUser.displayName;
+        // Name text (with its flair, if any) is rendered by
+        // applyEquippedCosmetics()'s renderNameFlairEverywhere() above.
         document.getElementById('auth-user-coins-count').textContent = currentUser.coins || 0;
         const badgeEl = document.getElementById('auth-user-badge');
         if (window.RankBadges && currentUser.rank) {
           badgeEl.innerHTML = window.RankBadges.render(currentUser.rank.key, currentUser.rank.sub, 20);
           badgeEl.title = currentUser.rank.label + ' - ' + currentUser.totalXp + ' XP';
         }
-        // Show the real account name instead of the generic "You" default -
-        // but don't clobber a nickname someone deliberately typed in.
-        const usernameInput = document.getElementById('input-username');
-        const current = usernameInput.value.trim();
-        if (!current || current === 'You') usernameInput.value = currentUser.displayName;
+        renderHomeRankHero();
+        // A logged-in account's name is fixed - the input still backs
+        // startGameFlow()'s playerName read, so it's kept in sync but no
+        // longer user-editable (see username-fg being hidden above).
+        document.getElementById('input-username').value = currentUser.displayName;
       }
       // Ranked play requires a logged-in account - drop back to Unranked on logout
       // rather than leaving a Ranked selection that can no longer actually apply.
@@ -1299,10 +2049,14 @@
         const data = await res.json();
         currentUser = data.user || null;
         hasUnclaimedDailyReward = !!data.hasUnclaimedDailyReward;
+        experimentalBotsInfo = data.experimentalBots || {};
+        rankTiersInfo = data.rankTiers || [];
       } catch (e) {
         currentUser = null;
+        experimentalBotsInfo = {};
       }
       updateAuthUI();
+      renderExperimentalBotLocks();
       if (currentUser && hasUnclaimedDailyReward) showDailyRewardPrompt();
     }
 
@@ -1370,7 +2124,9 @@
         const data = await res.json();
         if (!res.ok) { errEl.textContent = data.error || 'Login failed.'; errEl.classList.remove('hidden'); return; }
         currentUser = data.user;
+        experimentalBotsInfo = data.experimentalBots || {};
         updateAuthUI();
+        renderExperimentalBotLocks();
         document.getElementById('auth-modal').classList.add('hidden');
         e.target.reset();
         reconnectSocketForAuthChange();
@@ -1397,7 +2153,9 @@
         const data = await res.json();
         if (!res.ok) { errEl.textContent = data.error || 'Sign up failed.'; errEl.classList.remove('hidden'); return; }
         currentUser = data.user;
+        experimentalBotsInfo = data.experimentalBots || {};
         updateAuthUI();
+        renderExperimentalBotLocks();
         document.getElementById('auth-modal').classList.add('hidden');
         e.target.reset();
         reconnectSocketForAuthChange();
@@ -1411,7 +2169,9 @@
     document.getElementById('btn-logout').addEventListener('click', async () => {
       try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
       currentUser = null;
+      experimentalBotsInfo = {};
       updateAuthUI();
+      renderExperimentalBotLocks();
       reconnectSocketForAuthChange();
     });
 
@@ -1425,7 +2185,7 @@
         if (!res.ok) { console.error('openProfile: /api/profile returned', res.status); return; }
         const p = await res.json();
 
-        document.getElementById('profile-name').textContent = p.displayName;
+        document.getElementById('profile-name').innerHTML = nameFlairHTML(p.displayName);
         document.getElementById('profile-rank-label').textContent = p.rank.label;
         if (window.RankBadges) {
           document.getElementById('profile-badge').innerHTML = window.RankBadges.render(p.rank.key, p.rank.sub, 48);
@@ -1460,31 +2220,146 @@
       document.getElementById('profile-modal').classList.add('hidden');
     });
 
-    // ===== Customize (cosmetics shop - card backs, table felt) =====
+    // ===== Public profile (click any leaderboard row) =====
+    async function openPublicProfile(userId) {
+      // Clicking your own row: just reuse the richer "your own profile"
+      // modal (it already has everything this one has, plus coins) instead
+      // of a second, worse view of the same account.
+      if (currentUser && userId === currentUser.id) { openProfile(); return; }
+      try {
+        const res = await fetch('/api/users/' + userId + '/public-profile');
+        if (!res.ok) { console.error('openPublicProfile: request returned', res.status); return; }
+        const p = await res.json();
+
+        document.getElementById('public-profile-name').textContent = p.displayName;
+        document.getElementById('public-profile-rank-label').textContent = p.rank.label;
+        if (window.RankBadges) {
+          document.getElementById('public-profile-badge').innerHTML = window.RankBadges.render(p.rank.key, p.rank.sub, 48);
+        }
+
+        const xpIntoTier = p.totalXp - p.rank.threshold;
+        const xpSpan = p.rank.nextThreshold != null ? p.rank.nextThreshold - p.rank.threshold : null;
+        const progressPct = xpSpan ? Math.min(100, (xpIntoTier / xpSpan) * 100) : 100;
+        document.getElementById('public-profile-xp-bar-fill').style.width = progressPct + '%';
+        document.getElementById('public-profile-xp-text').textContent = p.rank.nextThreshold != null
+          ? p.totalXp + ' / ' + p.rank.nextThreshold + ' XP to ' + p.rank.nextLabel
+          : p.totalXp + ' XP, top rank reached';
+
+        document.getElementById('public-profile-hands-played').textContent = p.handsPlayed;
+        document.getElementById('public-profile-win-pct').textContent = p.winPct != null ? Math.round(p.winPct * 100) + '%' : '-';
+        document.getElementById('public-profile-hours-played').textContent = p.hoursPlayed.toFixed(1) + 'h';
+        document.getElementById('public-profile-net-profit').textContent = (p.netProfit >= 0 ? '+' : '') + '$' + p.netProfit;
+        document.getElementById('public-profile-biggest-pot').textContent = '$' + p.biggestPot;
+        document.getElementById('public-profile-biggest-win').textContent = '$' + p.biggestWin;
+        document.getElementById('public-profile-wsd-pct').textContent = p.wsdPct != null ? Math.round(p.wsdPct * 100) + '%' : '-';
+
+        document.getElementById('public-profile-modal').classList.remove('hidden');
+      } catch (e) { console.error('openPublicProfile failed:', e); }
+    }
+    document.getElementById('btn-close-public-profile').addEventListener('click', () => {
+      document.getElementById('public-profile-modal').classList.add('hidden');
+    });
+
+    // ===== Delete Account =====
+    document.getElementById('btn-open-delete-account').addEventListener('click', () => {
+      document.getElementById('profile-modal').classList.add('hidden');
+      document.getElementById('delete-account-form').reset();
+      document.getElementById('delete-account-error').classList.add('hidden');
+      document.getElementById('delete-account-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-cancel-delete-account').addEventListener('click', () => {
+      document.getElementById('delete-account-modal').classList.add('hidden');
+    });
+    document.getElementById('delete-account-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const password = document.getElementById('delete-account-password').value;
+      const errEl = document.getElementById('delete-account-error');
+      errEl.classList.add('hidden');
+      const confirmBtn = document.getElementById('btn-confirm-delete-account');
+      confirmBtn.disabled = true;
+      try {
+        const res = await fetch('/api/account/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          errEl.textContent = data.error || 'Could not delete account.';
+          errEl.classList.remove('hidden');
+          confirmBtn.disabled = false;
+          return;
+        }
+        // Account and session are gone server-side - reloading is the
+        // simplest way to land back on a clean, logged-out homepage rather
+        // than trying to unwind every bit of currentUser-dependent UI state
+        // by hand.
+        location.reload();
+      } catch (err) {
+        errEl.textContent = 'Network error - please try again.';
+        errEl.classList.remove('hidden');
+        confirmBtn.disabled = false;
+      }
+    });
+
+    // ===== Customize (cosmetics shop) =====
+    const CUSTOMIZE_CATEGORIES = ['cardBack', 'feltColor', 'tableTheme', 'rippleColor', 'nameFlair', 'victoryEffect'];
+    const CUSTOMIZE_CURRENT_USER_FIELD = {
+      cardBack: 'equippedCardBack',
+      feltColor: 'equippedFeltColor',
+      tableTheme: 'equippedTableTheme',
+      rippleColor: 'equippedRippleColor',
+      nameFlair: 'equippedNameFlair',
+      victoryEffect: 'equippedVictoryEffect',
+    };
+    const VICTORY_EFFECT_ICON = { none: '—', confetti: '🎉', coinShower: '🪙', fireworks: '🎆', iceBurst: '❄️', starShower: '🌠', lightningStrike: '⚡', goldenGlow: '✨', royalFanfare: '👑' };
+
     function customizeSwatchHTML(category, key) {
-      // Renders using the exact same CSS the real table/cards use (see
-      // #app[data-cardback=...]/#app[data-felt=...] in styles.css) by
-      // stamping the same data attribute onto a small preview element -
-      // what you see in the shop is exactly what you'll get equipped.
+      // Card backs/felt/table-theme render using the exact same CSS the real
+      // table/cards use (see #app[data-cardback=...]/[data-felt=...]/
+      // [data-theme=...] in styles.css) by stamping the same data attribute
+      // onto a small preview element - what you see in the shop is exactly
+      // what you'll get equipped.
       if (category === 'cardBack') {
         return '<div class="customize-swatch" data-cardback="' + key + '"><div class="card card-b customize-swatch-card"></div></div>';
       }
-      return '<div class="customize-swatch" data-felt="' + key + '"><div class="customize-swatch-felt"></div></div>';
+      if (category === 'feltColor') {
+        return '<div class="customize-swatch" data-felt="' + key + '"><div class="customize-swatch-felt"></div></div>';
+      }
+      if (category === 'tableTheme') {
+        return '<div class="customize-swatch" data-theme="' + key + '"><div class="customize-swatch-theme"></div></div>';
+      }
+      if (category === 'rippleColor') {
+        return '<div class="customize-swatch" data-ripple="' + key + '"><div class="customize-swatch-ripple"></div></div>';
+      }
+      if (category === 'nameFlair') {
+        return '<div class="customize-swatch"><div class="customize-swatch-flair" data-flair="' + key + '">Name</div></div>';
+      }
+      if (category === 'victoryEffect') {
+        return '<div class="customize-swatch"><div class="customize-swatch-effect">' + (VICTORY_EFFECT_ICON[key] || '🎊') + '</div></div>';
+      }
+      return '<div class="customize-swatch"></div>';
     }
 
     function renderCustomizeGrid(gridEl, category, items) {
       gridEl.innerHTML = items.map((item) => {
         const label = item.name;
+        const rankLocked = item.cost === null && !item.owned;
+        const tournamentLocked = item.cost === 'tournament' && !item.owned;
         let action;
         if (item.equipped) {
           action = '<span class="customize-equipped-label">Equipped</span>';
         } else if (item.owned) {
           action = '<button class="sec-btn customize-action-btn" data-action="equip" data-category="' + category + '" data-key="' + item.key + '">Equip</button>';
+        } else if (rankLocked) {
+          action = '<span class="customize-locked-label">🔒 ' + (item.unlockRank ? 'Rank: ' + item.unlockRank : 'Rank-locked') + '</span>';
+        } else if (tournamentLocked) {
+          action = '<span class="customize-locked-label">🏆 ' + escapeHtml(item.unlockHint || 'Tournament-exclusive') + '</span>';
         } else {
           action = '<button class="sec-btn customize-action-btn" data-action="unlock" data-category="' + category + '" data-key="' + item.key + '">🪙 ' + item.cost + '</button>';
         }
         return (
-          '<div class="customize-item">' +
+          '<div class="customize-item' + ((rankLocked || tournamentLocked) ? ' customize-item-locked' : '') + '">' +
             customizeSwatchHTML(category, item.key) +
             '<div class="customize-item-name">' + label + '</div>' +
             action +
@@ -1498,9 +2373,17 @@
       if (!res.ok) { console.error('loadCustomizeShop: /api/cosmetics returned', res.status); return; }
       const data = await res.json();
       document.getElementById('customize-coins-count').textContent = data.coins;
-      renderCustomizeGrid(document.getElementById('customize-cardback-grid'), 'cardBack', data.cardBack);
-      renderCustomizeGrid(document.getElementById('customize-felt-grid'), 'feltColor', data.feltColor);
+      CUSTOMIZE_CATEGORIES.forEach((category) => {
+        renderCustomizeGrid(document.getElementById('customize-' + category + '-grid'), category, data[category] || []);
+      });
     }
+
+    document.querySelectorAll('.customize-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.customize-tab').forEach((t) => t.classList.toggle('active', t === tab));
+        document.querySelectorAll('.customize-section').forEach((s) => s.classList.toggle('hidden', s.dataset.category !== tab.dataset.category));
+      });
+    });
 
     async function openCustomize() {
       if (!currentUser) return;
@@ -1526,9 +2409,10 @@
         const result = await res.json();
         if (!res.ok) { alert(result.error || 'Something went wrong.'); btn.disabled = false; return; }
         if (action === 'equip') {
-          if (category === 'cardBack') currentUser.equippedCardBack = key;
-          else currentUser.equippedFeltColor = key;
+          const field = CUSTOMIZE_CURRENT_USER_FIELD[category];
+          if (field) currentUser[field] = key;
           applyEquippedCosmetics();
+          updateAuthUI();
         } else if (result.coins !== undefined) {
           currentUser.coins = result.coins;
           updateAuthUI();
@@ -1541,10 +2425,15 @@
     });
 
     // ===== Leaderboard (always visible on the Play page, no click needed) =====
+    // The home page widget only ever shows the top 5 - LEADERBOARD_HOME_SIZE
+    // is the single source of truth for that cap (both the fetch limit and,
+    // implicitly, how many rows can ever render).
+    const LEADERBOARD_HOME_SIZE = 5;
+
     function leaderboardRowHTML(entry, isYou) {
       const badge = window.RankBadges ? window.RankBadges.render(entry.tier.key, entry.tier.sub, 22) : '';
       return (
-        '<div class="lb-row' + (isYou ? ' lb-you' : '') + '">' +
+        '<div class="lb-row' + (isYou ? ' lb-you' : '') + '" data-user-id="' + entry.id + '">' +
           '<span class="lb-rank">#' + entry.rank + '</span>' +
           '<span class="lb-badge">' + badge + '</span>' +
           '<span class="lb-name">' + escapeHtml(entry.displayName) + '</span>' +
@@ -1563,10 +2452,10 @@
       listEl.innerHTML = '<p class="lb-loading">Loading...</p>';
       youRowEl.classList.add('hidden');
       try {
-        const res = await fetch('/api/leaderboard?period=' + leaderboardPeriod);
+        const res = await fetch('/api/leaderboard?period=' + leaderboardPeriod + '&limit=' + LEADERBOARD_HOME_SIZE);
         const data = await res.json();
         if (!data.leaderboard.length) {
-          listEl.innerHTML = '<p class="lb-loading">' + (leaderboardPeriod === 'week' ? 'No ranked XP earned this week yet - be the first!' : 'No ranked players yet - be the first!') + '</p>';
+          listEl.innerHTML = '<p class="lb-loading">' + (leaderboardPeriod === 'week' ? 'No ranked XP earned this week yet, be the first!' : 'No ranked players yet, be the first!') + '</p>';
         } else {
           listEl.innerHTML = data.leaderboard.map((e) => leaderboardRowHTML(e, !!(data.you && e.id === data.you.id))).join('');
         }
@@ -1577,7 +2466,7 @@
           youRowEl.classList.remove('hidden');
         }
       } catch (e) {
-        listEl.innerHTML = '<p class="lb-loading">Couldn\'t load the leaderboard - please try again.</p>';
+        listEl.innerHTML = '<p class="lb-loading">Couldn\'t load the leaderboard. Please try again.</p>';
       }
     }
 
@@ -1586,6 +2475,16 @@
         document.querySelectorAll('.lb-period-tab').forEach((t) => t.classList.toggle('active', t === tab));
         loadLeaderboard(tab.dataset.period);
       });
+    });
+
+    // Every leaderboard row (including the pinned "you" row) opens that
+    // player's public profile - delegated on the shared ancestor since both
+    // #home-leaderboard-list and #home-leaderboard-you-row get their
+    // innerHTML fully replaced on every load.
+    document.getElementById('play-leaderboard-panel').addEventListener('click', (e) => {
+      const row = e.target.closest('.lb-row');
+      const userId = row && row.dataset.userId;
+      if (userId) openPublicProfile(parseInt(userId, 10));
     });
 
     loadLeaderboard('all');
@@ -1735,11 +2634,38 @@
       document.getElementById('ranked-setup-modal').classList.remove('hidden');
     });
 
+    // ===== Rumble =====
+    // Fixed difficulty (not user-selectable in v1) - Rumble is always a
+    // standardized 6-max table, same discipline as ranked's fixed settings,
+    // so the difficulty picker on the home page (which might be left on an
+    // experimental, heads-up-only personality) never leaks into it. Skips
+    // the "Configure Bots..." overlay and starts immediately, same as ranked.
+    function startRumbleGame() {
+      setRankedModeUI(false);
+      const difficulty = 'medium';
+      settings.difficulty = difficulty;
+      playerName = document.getElementById('input-username').value.trim() || 'You';
+      document.getElementById('hm').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+      document.getElementById('hu').textContent = getDisplayName(playerName);
+      document.getElementById('app').setAttribute('data-diff', difficulty);
+      homeVisible = false;
+      document.getElementById('site-shell').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('btn-toggle-turbo').classList.add('hidden'); // fixed shot clock, no turbo in Rumble
+      ensureMusicStarted();
+      socket.emit('updateSettings', { ...settings, playerName, difficulty, rumbleMode: true });
+      socket.emit('startGame');
+    }
+    document.getElementById('btn-play-rumble').addEventListener('click', () => {
+      playRumbleIntro(startRumbleGame);
+    });
+
     // ===== Ranked Setup =====
     // Display only - mirrors src/rankTiers.js's DIFFICULTY_XP exactly. The
     // server is always the authority on the real (pot-scaled) amount; this
     // is just so the player knows roughly what's at stake before playing.
-    const CLIENT_DIFFICULTY_XP = { easy: { win: 8, loss: -4 }, medium: { win: 14, loss: -8 }, hard: { win: 22, loss: -14 }, expert: { win: 32, loss: -22 } };
+    const CLIENT_DIFFICULTY_XP = { easy: { win: 8, loss: -3 }, medium: { win: 14, loss: -5 }, hard: { win: 22, loss: -8 }, expert: { win: 32, loss: -12 } };
     const TOURNAMENT_KEY_FOR_HANDS = { 0: 'single', 10: 'short', 25: 'standard', 50: 'long' };
     let rankedSetupDifficulty = 'easy';
     let rankedSetupHands = 0;
@@ -1747,7 +2673,7 @@
     function updateRankedSetupXpInfo() {
       const xp = CLIENT_DIFFICULTY_XP[rankedSetupDifficulty];
       document.getElementById('ranked-setup-xp-info').textContent =
-        'Roughly +' + xp.win + ' XP for a win, ' + xp.loss + ' XP for a loss at this difficulty - scales with the size of the pot.';
+        'Roughly +' + xp.win + ' XP for a win, ' + xp.loss + ' XP for a loss at this difficulty, scaling with the size of your own win or loss.';
     }
     updateRankedSetupXpInfo();
 
@@ -1768,8 +2694,37 @@
       document.getElementById('ranked-setup-modal').classList.add('hidden');
     });
 
-    document.getElementById('btn-ranked-setup-begin').addEventListener('click', () => {
-      document.getElementById('ranked-setup-modal').classList.add('hidden');
+    // Plays the "entering ranked" intro once (see #ranked-intro-overlay's
+    // CSS for the actual sequence/timing). onComplete (the real game-start
+    // work) fires at 2.7s - deliberately BEFORE the overlay's own fade-out
+    // even starts (its CSS animation-delay is 2.9s) - so the switch to the
+    // real ranked table always happens while the overlay is still fully
+    // opaque. Triggering the switch off the same ~3.5s timer the fade-out
+    // uses (rather than this 200ms-early margin) is what used to let a
+    // frame or two of the stale homepage flash through underneath: JS
+    // timers and CSS animation timing aren't perfectly synchronized, so if
+    // the switch landed even slightly after the fade-out had already begun
+    // making the overlay transparent, whatever was still behind it (the
+    // homepage, not yet hidden) would show through. Switching early means
+    // the fade-out always reveals the already-correct game table instead.
+    const RANKED_INTRO_CHIME_DELAY = 500; // a small pause after the click, before the fanfare/jumps start
+    function playRankedIntro(onComplete) {
+      const overlay = document.getElementById('ranked-intro-overlay');
+      overlay.classList.remove('hidden');
+      setTimeout(srankedintro, RANKED_INTRO_CHIME_DELAY);
+      setTimeout(onComplete, 2700);
+      // Pure cleanup once the fade-out has visually finished - nothing
+      // inside the overlay is interactive, so nothing depends on this
+      // firing at an exact moment.
+      setTimeout(() => overlay.classList.add('hidden'), 3600);
+    }
+
+    // Shared by the initial "Begin Ranked Game" click and the results
+    // screen's "Play Again" (see btn-rank-results-again below) - always
+    // uses whatever rankedSetupDifficulty/rankedSetupHands was last picked
+    // in the setup modal, so Play Again reuses the same settings without
+    // making the player click back through setup again.
+    function startRankedGame() {
       document.getElementById('input-difficulty').value = rankedSetupDifficulty;
       setRankedModeUI(true);
       playerName = currentUser.displayName; // ranked always plays under the account name
@@ -1787,6 +2742,10 @@
       // the hand immediately rather than waiting for a separate confirm click.
       socket.emit('updateSettings', { difficulty: rankedSetupDifficulty, ranked: true, tournamentKey: TOURNAMENT_KEY_FOR_HANDS[rankedSetupHands] || 'single' });
       socket.emit('startGame');
+    }
+    document.getElementById('btn-ranked-setup-begin').addEventListener('click', () => {
+      document.getElementById('ranked-setup-modal').classList.add('hidden');
+      playRankedIntro(startRankedGame);
     });
     document.getElementById('btn-start-hand').addEventListener('click',()=>{
       // Send bot customization to server
@@ -1799,6 +2758,9 @@
       socket.emit('updateBotCustomization', customization);
       document.getElementById('pre-hand-overlay').classList.add('hidden');
       socket.emit('startGame');
+      // Purely a visual/audio flourish layered on top - startGame above
+      // already fired, nothing about the actual game start waits on this.
+      playDifficultyIntro(document.getElementById('input-difficulty').value);
     });
     function leaveToHome() {
       homeVisible = true;
@@ -1823,6 +2785,15 @@
       document.getElementById('pre-hand-overlay').classList.add('hidden');
       document.getElementById('room-lobby-overlay').classList.add('hidden');
       document.getElementById('rank-results-modal').classList.add('hidden');
+      document.getElementById('rumble-results-modal').classList.add('hidden');
+      document.getElementById('rumble-reveal-overlay').classList.add('hidden');
+      document.getElementById('rpu-private-reveal-overlay').classList.add('hidden');
+      document.getElementById('diff-intro-overlay').classList.add('hidden');
+      document.getElementById('rumble-powerup-panel').classList.add('hidden');
+      document.getElementById('tournament-round-result-modal').classList.add('hidden');
+      document.getElementById('tournament-exit-confirm-modal').classList.add('hidden');
+      clearTimeout(privateRevealAutoCloseTimer);
+      rumbleTargetingActive = false;
       document.getElementById('site-shell').classList.remove('hidden');
       // Turbo/the username field are only ever restricted while actually
       // inside a ranked game - always safe to restore once back home.
@@ -1894,16 +2865,37 @@
 
     // ===== Analyzer =====
     document.getElementById('btn-analyze-hand').addEventListener('click',()=>{
+      analyzerOpenedFromRankResults = false;
+      socket.emit('requestHandAnalysis');
+    });
+    // Same request/response flow as the unranked result-overlay's own
+    // Analyze Hand button above - the server already builds hand analysis
+    // for any solo (non-room) hand regardless of ranked status, this was
+    // just missing an entry point on the ranked results screen. Opening it
+    // from here hides #rank-results-modal underneath (see the handAnalysis
+    // listener below) - that modal is full-viewport with its own z-index
+    // (230) above the analyzer's (60) and its own dark scrim, so without
+    // this the analyzer used to render fully obscured behind it, looking
+    // "hidden and greyed out". Closing the analyzer brings the results
+    // screen right back so Continue is still there afterward.
+    let analyzerOpenedFromRankResults = false;
+    document.getElementById('btn-analyze-hand-ranked').addEventListener('click',()=>{
+      analyzerOpenedFromRankResults = true;
       socket.emit('requestHandAnalysis');
     });
     document.getElementById('btn-close-analyzer').addEventListener('click',()=>{
       document.getElementById('analyzer-modal').classList.add('hidden');
+      if (analyzerOpenedFromRankResults) {
+        document.getElementById('rank-results-modal').classList.remove('hidden');
+        analyzerOpenedFromRankResults = false;
+      }
     });
 
     let analyzerData = null;
     let analyzerStreetIdx = 0;
 
     socket.on('handAnalysis', (data) => {
+      if (analyzerOpenedFromRankResults) document.getElementById('rank-results-modal').classList.add('hidden');
       document.getElementById('analyzer-modal').classList.remove('hidden');
       analyzerData = data;
       const snaps = data.streetSnapshots || [];
@@ -2093,6 +3085,11 @@
 
     // ===== Game Update =====
     let prevHandCount = 0;
+    // Tracks the board's card count across renders so the flop's reveal (0
+    // cards -> 3 at once) can be detected and animated exactly once, rather
+    // than replaying the flip on every subsequent state update for the same
+    // street (e.g. after each betting action).
+    let prevBoardLength = 0;
     function updateGameState(state) {
       if (!state) return;
       checkTensionTrigger(state);
@@ -2110,6 +3107,19 @@
       }
       if (typeof state.turboMode === 'boolean' && state.turboMode !== turboEnabled) setTurboButtonState(state.turboMode);
       document.getElementById('hranked').classList.toggle('hidden', !state.ranked);
+      const hrumbleEl = document.getElementById('hrumble');
+      hrumbleEl.classList.toggle('hidden', !state.rumbleMode);
+      if (state.rumbleMode) {
+        const curHand = Math.min((state.rumbleHandsPlayed || 0) + 1, state.rumbleHandsTotal || 5);
+        hrumbleEl.textContent = '🎲 Rumble (Hand ' + curHand + '/' + (state.rumbleHandsTotal || 5) + ')';
+      }
+      const htournamentEl = document.getElementById('htournament');
+      htournamentEl.classList.toggle('hidden', !state.tournamentMode);
+      if (state.tournamentMode) {
+        const curHand = Math.min((state.tournamentHandsPlayed || 0) + 1, state.tournamentHandsTotal || 10);
+        htournamentEl.textContent = '🏅 Round ' + (state.tournamentRoundNumber || 1) + '/' + (state.tournamentRoundsTotal || 5) +
+          ' (Hand ' + curHand + '/' + (state.tournamentHandsTotal || 10) + ')';
+      }
 
       if (roomMode) {
         // Pause is host-only in a room (the server already refuses a
@@ -2163,12 +3173,37 @@
       document.getElementById('h-blinds').textContent = (state.smallBlind||10) + '/' + (state.bigBlind||20);
       document.getElementById('pot-value').textContent = '$' + state.pot;
 
-      // Board
+      // Board - the 3 flop slots (i<3) always show a face-down card back
+      // rather than an empty slot while waiting to be dealt (the equipped
+      // card back gets real screen time this way, not just on hole cards),
+      // and flip face-up with a real turn animation the one render where
+      // the flop actually lands. Turn/river (i>=3) keep the plain
+      // empty-until-dealt behavior - they're revealed one at a time already,
+      // which reads as its own moment without needing a flip.
+      const newBoardLength = (state.board || []).length;
+      const flopJustRevealed = prevBoardLength === 0 && newBoardLength >= 3;
       document.querySelectorAll('.bc').forEach((el, i) => {
         const card = state.board && state.board[i] ? state.board[i] : null;
-        if (card) { el.className = 'bc'; el.innerHTML = cHTML(card); }
-        else { el.className = 'bc empty'; el.innerHTML = ''; }
+        if (i < 3) {
+          el.className = 'bc';
+          if (card && flopJustRevealed) {
+            el.innerHTML = '<div class="bc-flip"><div class="bc-flip-inner">' +
+              '<div class="bc-flip-face bc-flip-front">' + cHTML(null) + '</div>' +
+              '<div class="bc-flip-face bc-flip-back">' + cHTML(card) + '</div>' +
+            '</div></div>';
+            const wrap = el.querySelector('.bc-flip');
+            // Staggered per-card, not simultaneous - reads as a dealer
+            // turning them over in sequence rather than one flat flip.
+            setTimeout(() => { if (wrap) wrap.classList.add('flipped'); }, 120 * i);
+          } else {
+            el.innerHTML = cHTML(card); // cHTML(null) already renders a face-down card-back
+          }
+        } else {
+          if (card) { el.className = 'bc'; el.innerHTML = cHTML(card); }
+          else { el.className = 'bc empty'; el.innerHTML = ''; }
+        }
       });
+      prevBoardLength = newBoardLength;
 
       // Turn indicator (now in left panel)
       const turnEl = document.getElementById('turn-indicator');
@@ -2195,7 +3230,13 @@
         const colorClass = p.colorClass || 'color-0';
         const el = document.createElement('div');
         const isActive = p.active && !state.complete;
-        el.className = 'seat ' + (p.active ? 'active' : '') + ' ' + (p.folded ? 'folded' : '') + ' ' + (you ? 'you' : '') + ' ' + colorClass;
+        // Rumble: a live (not-folded, not-you) seat is clickable while the
+        // player is choosing a target for X-Ray Vision/Freeze-Silence - see
+        // the delegated click listener on #seats-container.
+        const isTargetable = rumbleTargetingActive && !you && !p.folded;
+        const isFrozen = state.rumbleMode && state.frozenPlayerId === p.id && !state.complete;
+        el.className = 'seat ' + (p.active ? 'active' : '') + ' ' + (p.folded ? 'folded' : '') + ' ' + (you ? 'you' : '') + ' ' + colorClass + (isTargetable ? ' targetable' : '') + (isFrozen ? ' rpu-frozen' : '');
+        el.dataset.playerId = p.id;
         el.style.top = pos.t;
         el.style.left = pos.l;
         const isSB = state.sbId && p.id === state.sbId;
@@ -2213,7 +3254,14 @@
         }
         // Floating chip for active player
         const chipHTML = isActive ? '<div class="turn-chip"></div>' : '';
-        el.innerHTML = chipHTML + '<div class="sh"><span class="sn">' + escapeHtml(displayName) + '</span>' + badge + '</div><div class="sc">' + cards + '</div><div class="ss">$' + p.stack + '</div><div class="sbet ' + (p.contributed ? 'has' : '') + '">' + (p.contributed > 0 ? '$' + p.contributed : '') + '</div>' + (p.folded ? '<div class="sf">FOLD</div>' : '') + lastActHTML;
+        const frozenHTML = isFrozen ? '<div class="rpu-frozen-badge">❄️ Frozen</div>' : '';
+        // Only the human's own equipped nameFlair renders at the table - a
+        // Tournament reward for winning a tier (see COSMETICS_CATALOG's
+        // nameFlair "veteran" entries). Solo-only scope for now: bot/other-
+        // seat names stay plain, since getStateFor() doesn't broadcast any
+        // other seat's cosmetics today (nothing to render even if we tried).
+        const nameHTML = you ? nameFlairHTML(displayName) : escapeHtml(displayName);
+        el.innerHTML = chipHTML + frozenHTML + '<div class="sh"><span class="sn">' + nameHTML + '</span>' + badge + '</div><div class="sc">' + cards + '</div><div class="ss">$' + p.stack + '</div><div class="sbet ' + (p.contributed ? 'has' : '') + '">' + (p.contributed > 0 ? '$' + p.contributed : '') + '</div>' + (p.folded ? '<div class="sf">FOLD</div>' : '') + lastActHTML;
         container.appendChild(el);
       });
 
@@ -2252,7 +3300,21 @@
         document.getElementById('btn-fold').style.display = leg.fold ? '' : 'none';
         document.getElementById('btn-check').style.display = leg.check ? '' : 'none';
         const cb = document.getElementById('btn-call');
-        if (leg.call) { cb.style.display = ''; cb.textContent = 'Call $' + leg.callAmount; } else cb.style.display = 'none';
+        if (leg.call) {
+          cb.style.display = '';
+          // callAmount is always the correct amount - the actual chips
+          // that leave your stack, standard poker convention (never the
+          // table's total bet, which you'd only owe in full if you hadn't
+          // already put anything in this street). When you HAVE already
+          // contributed this street (from your own earlier raise, most
+          // often), callAmount can look surprisingly small next to the pot
+          // - the "(to $X)" suffix clarifies what the resulting total bet
+          // is without changing what the button itself actually charges.
+          cb.textContent = 'Call $' + leg.callAmount;
+          if (typeof leg.currentBet === 'number' && leg.currentBet > leg.callAmount) {
+            cb.textContent += ' (to $' + leg.currentBet + ')';
+          }
+        } else cb.style.display = 'none';
         const canBetOrRaise = leg.bet || leg.raise;
         if (canBetOrRaise) {
           betArea.classList.remove('hidden');
@@ -2298,8 +3360,15 @@
         }
         document.getElementById('result-details').innerHTML = html;
         document.getElementById('toggle-reset').checked = state.resetBalanceEachHand || false;
-        if (!homeVisible) { if (youWon) swin(); else slose(); }
+        if (!homeVisible) { if (youWon) { swin(); playVictoryEffect(); } else slose(); }
       } else { overlay.classList.add('hidden'); }
+      // Toggling this mid-Rumble/Tournament would silently break the "most
+      // chips after N hands" round format (each hand would reset back to
+      // $1,000 instead of carrying stacks forward) - hide the control
+      // entirely rather than letting a curious click sabotage the player's
+      // own session (Tournament rounds have real coins staked on them, so
+      // this matters even more there than in Rumble).
+      document.getElementById('toggle-reset-label').classList.toggle('hidden', !!state.rumbleMode || !!state.tournamentMode);
 
       // Pre-hand state
       const preHandOverlay = document.getElementById('pre-hand-overlay');
@@ -2332,7 +3401,547 @@
 
       // Stats
       renderStats(state);
+
+      updateRumblePowerUpPanel(state);
     }
+
+    // ===== Rumble: secret power-up panel, targeting, reveal animation, results =====
+
+    function playerDisplayNameFor(id) {
+      if (!lastGameState) return id;
+      if (id === lastGameState.viewerId) return getDisplayName(playerName);
+      const p = lastGameState.players.find(pl => pl.id === id);
+      return p ? p.displayName : id;
+    }
+
+    function updateRumblePowerUpPanel(state) {
+      const panel = document.getElementById('rumble-powerup-panel');
+      if (!state.rumbleMode || !state.yourPowerUp) {
+        panel.classList.add('hidden');
+        rumbleTargetingActive = false;
+        return;
+      }
+      const pu = state.yourPowerUp;
+      const isYourTurn = state.actingId === state.viewerId && !state.complete;
+      if (!isYourTurn) rumbleTargetingActive = false; // the turn moved on - cancel any pending target selection
+      panel.classList.remove('hidden');
+      panel.classList.toggle('rpu-used', !!pu.used);
+      document.getElementById('rpu-icon').textContent = pu.icon;
+      document.getElementById('rpu-name').textContent = pu.name;
+      document.getElementById('rpu-desc').textContent = pu.description;
+      const btn = document.getElementById('btn-activate-powerup');
+      if (pu.used) {
+        btn.textContent = 'Used';
+        btn.disabled = true;
+      } else {
+        btn.disabled = !isYourTurn;
+        btn.textContent = rumbleTargetingActive ? 'Choose a target...' : 'Activate';
+      }
+      document.getElementById('rumble-powerup-target-hint').classList.toggle('hidden', !rumbleTargetingActive);
+    }
+
+    document.getElementById('btn-activate-powerup').addEventListener('click', () => {
+      if (!lastGameState || !lastGameState.yourPowerUp || lastGameState.yourPowerUp.used) return;
+      if (lastGameState.yourPowerUp.needsTarget) {
+        rumbleTargetingActive = !rumbleTargetingActive;
+        updateRumblePowerUpPanel(lastGameState);
+      } else {
+        socket.emit('usePowerUp', {});
+      }
+    });
+
+    // Delegated (not bound per-seat) since #seats-container's children are
+    // fully rebuilt on every gameState push - see updateGameState().
+    document.getElementById('seats-container').addEventListener('click', (e) => {
+      if (!rumbleTargetingActive || !lastGameState) return;
+      const seatEl = e.target.closest('.seat');
+      const pid = seatEl && seatEl.dataset.playerId;
+      if (!pid || pid === lastGameState.viewerId) return;
+      rumbleTargetingActive = false;
+      socket.emit('usePowerUp', { target: pid });
+    });
+
+    // Everyone at the table sees this, triggered by the 'powerUpActivated'
+    // broadcast - a quick pulse on the activator's own seat plus a
+    // center-screen card reveal (name/icon only - any private info the
+    // power-up grants is a separate, activator-only 'powerUpPrivateInfo'
+    // toast, never shown here). Queued rather than shown immediately so two
+    // activations landing close together play one after another instead of
+    // stepping on each other's overlay.
+    function queuePowerUpReveal(payload) {
+      rumbleRevealQueue.push(payload);
+      if (!rumbleRevealShowing) processRumbleRevealQueue();
+    }
+    function processRumbleRevealQueue() {
+      const payload = rumbleRevealQueue.shift();
+      if (!payload) { rumbleRevealShowing = false; return; }
+      rumbleRevealShowing = true;
+      showPowerUpReveal(payload);
+      setTimeout(processRumbleRevealQueue, 4200);
+    }
+    function showPowerUpReveal(payload) {
+      const seatEl = document.querySelector('#seats-container .seat[data-player-id="' + CSS.escape(payload.playerId) + '"]');
+      if (seatEl) {
+        seatEl.classList.remove('rpu-pulse');
+        void seatEl.offsetWidth; // force reflow so re-adding the class restarts the animation
+        seatEl.classList.add('rpu-pulse');
+      }
+      const actorName = playerDisplayNameFor(payload.playerId);
+      const targetName = payload.target ? playerDisplayNameFor(payload.target) : null;
+      document.getElementById('rpu-reveal-icon').textContent = payload.icon;
+      document.getElementById('rpu-reveal-name').textContent = payload.name;
+      document.getElementById('rpu-reveal-caption').textContent = actorName + ' used ' + payload.name + (targetName ? ' on ' + targetName : '') + '!';
+      document.getElementById('rpu-reveal-swap').classList.toggle('showing', payload.key === 'sleightOfHand');
+      const overlay = document.getElementById('rumble-reveal-overlay');
+      // display:none -> visible always restarts a CSS animation from frame
+      // zero (same technique #ranked-intro-overlay relies on) - force a
+      // hidden frame first so back-to-back reveals each play from the start.
+      overlay.classList.add('hidden');
+      void overlay.offsetWidth;
+      overlay.classList.remove('hidden');
+      if (!homeVisible) { beep(660, 0.09, 0.18, 'triangle'); setTimeout(() => beep(880, 0.12, 0.16, 'triangle'), 90); }
+      setTimeout(() => overlay.classList.add('hidden'), 4000);
+    }
+    socket.on('powerUpActivated', (payload) => {
+      if (homeVisible) return;
+      queuePowerUpReveal(payload);
+    });
+    // A real face-up card popup rather than a small corner toast - this is
+    // the actual private payoff of the power-up (the card X-Ray Vision
+    // revealed, the one Deck Whisperer peeked, the swap Sleight of Hand
+    // made), easy to miss as passive text in the toast stack. Dismisses on
+    // its own after 5s, or immediately on click, since it can appear
+    // mid-turn while the shot clock is still running.
+    let privateRevealAutoCloseTimer = null;
+    function showPrivatePowerUpReveal(info) {
+      const heading = document.getElementById('rpu-private-reveal-heading');
+      const cardsEl = document.getElementById('rpu-private-reveal-cards');
+      const captionEl = document.getElementById('rpu-private-reveal-caption');
+      if (info.type === 'xrayVision') {
+        heading.textContent = '👁️ X-Ray Vision';
+        cardsEl.innerHTML = cHTML(info.card);
+        captionEl.textContent = playerDisplayNameFor(info.target) + "'s hidden card";
+      } else if (info.type === 'deckWhisperer') {
+        heading.textContent = '🔮 Deck Whisperer';
+        cardsEl.innerHTML = cHTML(info.card);
+        captionEl.textContent = 'The next card off the deck';
+      } else if (info.type === 'mindReader') {
+        heading.textContent = '🧠 Mind Reader';
+        cardsEl.innerHTML = cHTML(info.cards[0]) + cHTML(info.cards[1]);
+        captionEl.textContent = playerDisplayNameFor(info.target) + "'s hidden cards";
+      } else if (info.type === 'sleightOfHand') {
+        heading.textContent = '🃏 Sleight of Hand';
+        cardsEl.innerHTML = cHTML(info.oldCard) + '<span id="rpu-private-reveal-arrow">→</span>' + cHTML(info.newCard);
+        captionEl.textContent = 'You swapped this card for a new one';
+      } else if (info.type === 'mulligan') {
+        heading.textContent = '🔄 Mulligan';
+        cardsEl.innerHTML = cHTML(info.oldCards[0]) + cHTML(info.oldCards[1]) + '<span id="rpu-private-reveal-arrow">→</span>' + cHTML(info.newCards[0]) + cHTML(info.newCards[1]);
+        captionEl.textContent = 'You swapped both cards for new ones';
+      } else {
+        return;
+      }
+      const overlay = document.getElementById('rpu-private-reveal-overlay');
+      overlay.classList.add('hidden');
+      void overlay.offsetWidth;
+      overlay.classList.remove('hidden');
+      clearTimeout(privateRevealAutoCloseTimer);
+      privateRevealAutoCloseTimer = setTimeout(() => overlay.classList.add('hidden'), 5000);
+    }
+    document.getElementById('rpu-private-reveal-overlay').addEventListener('click', () => {
+      document.getElementById('rpu-private-reveal-overlay').classList.add('hidden');
+      clearTimeout(privateRevealAutoCloseTimer);
+    });
+    socket.on('powerUpPrivateInfo', (info) => {
+      if (homeVisible) return;
+      showPrivatePowerUpReveal(info);
+    });
+
+    socket.on('rumbleSessionComplete', (payload) => { pendingRumbleSessionComplete = payload; });
+
+    function showRumbleResultsScreen(payload) {
+      const viewerId = lastGameState ? lastGameState.viewerId : 'You';
+      const youWon = payload.winners.includes(viewerId);
+      document.getElementById('rumble-results-title').textContent = youWon
+        ? 'You Win the Rumble!'
+        : (payload.winners.length > 1 ? 'Tied for the Win' : 'Rumble Complete');
+      document.getElementById('rumble-results-standings').innerHTML = payload.standings.map((s, i) => {
+        const isYouRow = s.id === viewerId;
+        const isWinnerRow = payload.winners.includes(s.id);
+        const name = isYouRow ? getDisplayName(playerName) : s.displayName;
+        return '<div class="rumble-standing-row' + (isWinnerRow ? ' winner' : '') + (isYouRow ? ' you' : '') + '">' +
+          '<span class="rumble-standing-rank">#' + (i + 1) + '</span>' +
+          '<span class="rumble-standing-name">' + escapeHtml(name) + (isWinnerRow ? ' 🏆' : '') + '</span>' +
+          '<span class="rumble-standing-stack">$' + s.stack + '</span>' +
+          '</div>';
+      }).join('');
+      document.getElementById('rumble-results-modal').classList.remove('hidden');
+      if (!homeVisible) { if (youWon) { swin(); playVictoryEffect(); } else slose(); }
+    }
+    document.getElementById('btn-rumble-results-home').addEventListener('click', () => {
+      document.getElementById('rumble-results-modal').classList.add('hidden');
+      leaveToHome();
+    });
+    document.getElementById('btn-rumble-results-again').addEventListener('click', () => {
+      document.getElementById('rumble-results-modal').classList.add('hidden');
+      playRumbleIntro(startRumbleGame);
+    });
+
+    // ===== Tournament =====
+    let tournamentStatus = null; // last GET /api/tournament/status response
+
+    // A rising-prestige medal per tier, echoed both on the tier bar itself
+    // and as a large faded watermark in its background.
+    const TOURNAMENT_TIER_ICONS = {
+      local: '🥉', state: '🥈', na: '🥇', worldSeries: '🏆',
+      highRollers: '💎', celebrityCasual: '🌟', undergroundTables: '🎭',
+    };
+
+    function tournamentTierCardHTML(tier, coins, loggedIn) {
+      const rankLocked = loggedIn && !tier.rankUnlocked;
+      const canAfford = loggedIn && !rankLocked && coins >= tier.entryFee;
+      const disabled = !loggedIn || rankLocked || !canAfford;
+      const btnLabel = !loggedIn ? 'Log In to Enter'
+        : (rankLocked ? '🔒 Requires ' + tier.requiredRankLabel
+        : (!canAfford ? 'Not Enough Coins' : 'Enter'));
+      const icon = TOURNAMENT_TIER_ICONS[tier.key] || '🏅';
+      return '<div class="tournament-tier-bar' + (rankLocked ? ' tournament-tier-locked' : '') + '" data-tier-key="' + tier.key + '">' +
+        '<div class="tournament-tier-watermark">' + icon + '</div>' +
+        '<div class="tournament-tier-bar-icon">' + icon + '</div>' +
+        '<div class="tournament-tier-bar-info">' +
+          '<h3 class="tournament-tier-name">' + escapeHtml(tier.name) + '</h3>' +
+          '<div class="tournament-tier-stats">' +
+            '<span class="tournament-tier-fee">🪙 ' + tier.entryFee + ' entry</span>' +
+            '<span class="tournament-tier-payout">🏆 ' + tier.payout + ' payout</span>' +
+            (tier.requiredRankLabel ? '<span class="tournament-tier-rank-req">🎖 ' + escapeHtml(tier.requiredRankLabel) + '+ rank</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<button class="sec-btn tournament-enter-btn" data-tier-key="' + tier.key + '" type="button"' + (disabled ? ' disabled' : '') + '>' + btnLabel + '</button>' +
+      '</div>';
+    }
+
+    // Round nodes are strung together with connector lines (lit up once
+    // passed) ending in a trophy node - a literal "path to the trophy"
+    // rather than a bare row of boxes, and each node is tinted by its own
+    // round's difficulty (the same green/amber/red/silver language already
+    // used for the per-difficulty intro flashes) so the track reads as a
+    // real escalating journey instead of 5 identical tiles.
+    function tournamentProgressHTML(roundsCompleted, rounds) {
+      const nodesHTML = rounds.map((r, i) => {
+        const status = r.round <= roundsCompleted ? 'done' : (r.round === roundsCompleted + 1 ? 'current' : 'locked');
+        const icon = status === 'done' ? '✓' : (status === 'current' ? '▶' : '🔒');
+        const connector = i > 0
+          ? '<div class="tournament-round-connector' + (r.round <= roundsCompleted ? ' tournament-connector-done' : '') + '"></div>'
+          : '';
+        return connector + '<div class="tournament-round-node tournament-round-' + status + '" data-difficulty="' + r.difficulty + '">' +
+          '<div class="tournament-round-icon">' + icon + '</div>' +
+          '<div class="tournament-round-label">Round ' + r.round + '</div>' +
+          '<div class="tournament-round-diff">' + escapeHtml(r.label) + '</div>' +
+        '</div>';
+      }).join('');
+      const won = roundsCompleted >= rounds.length;
+      const trophyConnector = '<div class="tournament-round-connector' + (won ? ' tournament-connector-done' : '') + '"></div>';
+      const trophyNode = '<div class="tournament-trophy-node' + (won ? ' tournament-trophy-won' : '') + '">🏆</div>';
+      return nodesHTML + trophyConnector + trophyNode;
+    }
+
+    function renderTournamentPage() {
+      if (!tournamentStatus) return;
+      const selectView = document.getElementById('tournament-select-view');
+      const homeView = document.getElementById('tournament-home-view');
+      if (tournamentStatus.activeRun) {
+        selectView.classList.add('hidden');
+        homeView.classList.remove('hidden');
+        const run = tournamentStatus.activeRun;
+        const tier = tournamentStatus.tiers.find((t) => t.key === run.tierKey);
+        document.getElementById('tournament-home-tier-name').textContent = tier ? tier.name : run.tierKey;
+        document.getElementById('tournament-progress-track').innerHTML = tournamentProgressHTML(run.roundsCompleted, tournamentStatus.rounds);
+        const nextRoundInfo = tournamentStatus.rounds.find((r) => r.round === run.roundsCompleted + 1);
+        document.getElementById('btn-tournament-begin-round').textContent = nextRoundInfo
+          ? 'Begin Round ' + nextRoundInfo.round + ' (' + nextRoundInfo.label + ')'
+          : 'Begin Round';
+      } else {
+        selectView.classList.remove('hidden');
+        homeView.classList.add('hidden');
+        document.getElementById('tournament-tier-grid').innerHTML = tournamentStatus.tiers
+          .map((t) => tournamentTierCardHTML(t, tournamentStatus.coins, tournamentStatus.loggedIn))
+          .join('');
+      }
+    }
+
+    async function loadTournamentStatus() {
+      try {
+        const res = await fetch('/api/tournament/status');
+        tournamentStatus = await res.json();
+        renderTournamentPage();
+      } catch (e) { console.error('loadTournamentStatus failed:', e); }
+    }
+
+    document.getElementById('tournament-tier-grid').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.tournament-enter-btn');
+      if (!btn || btn.disabled) return;
+      if (!tournamentStatus || !tournamentStatus.loggedIn) {
+        document.getElementById('auth-modal').classList.remove('hidden');
+        return;
+      }
+      try {
+        const res = await fetch('/api/tournament/enter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tierKey: btn.dataset.tierKey }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) { showToast(data.error || "Couldn't enter the tournament.", { className: 'toast-coins-loss' }); return; }
+        if (currentUser) { currentUser.coins = data.coins; updateAuthUI(); }
+        await loadTournamentStatus();
+      } catch (e) { console.error('tournament enter failed:', e); }
+    });
+
+    // Pure DOM-toggling transition into the live table - the server has
+    // already started the round's TableGame session by the time this runs
+    // (beginTournamentRound's ack only fires after startGame() succeeded),
+    // so unlike startRumbleGame()/startRankedGame() there's no socket.emit
+    // here at all.
+    function enterTournamentRoundLiveView(label) {
+      setRankedModeUI(false);
+      playerName = document.getElementById('input-username').value.trim() || 'You';
+      document.getElementById('hm').textContent = label || 'Tournament';
+      document.getElementById('hu').textContent = getDisplayName(playerName);
+      homeVisible = false;
+      document.getElementById('site-shell').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      document.getElementById('pause-modal').classList.add('hidden');
+      document.getElementById('btn-toggle-turbo').classList.add('hidden'); // fixed shot clock, no turbo in Tournament
+      ensureMusicStarted();
+    }
+
+    // The curtain has to play BEFORE the round is actually started server-
+    // side, not after - beginTournamentRound deals hand #1 (and starts its
+    // 30s shot clock) the moment the server handles it, so emitting first
+    // and running the curtain during the ack's round-trip would let real
+    // time (and, worst case, the human's own turn) tick by while the table
+    // is still hidden behind the curtain. Same "curtain first, start the
+    // game from onComplete" ordering playRumbleIntro/playRankedIntro
+    // already use, just applied to a round-trip ack instead of a bare emit.
+    document.getElementById('btn-tournament-begin-round').addEventListener('click', () => {
+      const activeRun = tournamentStatus && tournamentStatus.activeRun;
+      const pendingRoundNumber = activeRun ? activeRun.roundsCompleted + 1 : 1;
+      playTournamentRoundIntro(pendingRoundNumber, () => {
+        socket.emit('beginTournamentRound', {}, (ack) => {
+          if (!ack || !ack.ok) { showToast((ack && ack.error) || "Couldn't start the round.", { className: 'toast-coins-loss' }); return; }
+          // Theme the table using the round's real difficulty (easy/medium/
+          // hard/expert - "Master" is round 5's display label only, backed
+          // by the same expert theming), from the status already cached.
+          const roundInfo = tournamentStatus && tournamentStatus.rounds ? tournamentStatus.rounds.find((r) => r.round === ack.roundNumber) : null;
+          if (roundInfo) document.getElementById('app').setAttribute('data-diff', roundInfo.difficulty);
+          enterTournamentRoundLiveView(ack.label);
+        });
+      });
+    });
+
+    document.getElementById('btn-tournament-exit').addEventListener('click', () => {
+      document.getElementById('tournament-exit-confirm-modal').classList.remove('hidden');
+    });
+    document.getElementById('btn-tournament-exit-cancel').addEventListener('click', () => {
+      document.getElementById('tournament-exit-confirm-modal').classList.add('hidden');
+    });
+    document.getElementById('btn-tournament-exit-confirm').addEventListener('click', async () => {
+      document.getElementById('tournament-exit-confirm-modal').classList.add('hidden');
+      try { await fetch('/api/tournament/exit', { method: 'POST' }); } catch (e) { console.error('tournament exit failed:', e); }
+      await loadTournamentStatus();
+    });
+
+    socket.on('tournamentRoundComplete', (payload) => {
+      const titleEl = document.getElementById('tournament-round-result-title');
+      const detailEl = document.getElementById('tournament-round-result-detail');
+      const unlocksEl = document.getElementById('tournament-round-result-unlocks');
+      if (payload.fullyWon) {
+        titleEl.textContent = '🏆 Tournament Won!';
+        detailEl.textContent = 'You cleared every round of the ' + payload.tierName + ' and earned ' + payload.payout + ' coins.';
+      } else if (payload.won) {
+        titleEl.textContent = 'Round ' + payload.roundNumber + ' Complete';
+        detailEl.textContent = 'You finished 1st and advance to round ' + (payload.roundNumber + 1) + '.';
+      } else if (payload.tied) {
+        titleEl.textContent = 'Tournament Over';
+        detailEl.textContent = 'You tied for 1st in round ' + payload.roundNumber + ", and an exact tie doesn't advance. The " + payload.tierName + ' run ends here.';
+      } else {
+        titleEl.textContent = 'Tournament Over';
+        detailEl.textContent = "You didn't finish 1st in round " + payload.roundNumber + '. The ' + payload.tierName + ' run ends here.';
+      }
+      if (payload.newlyUnlocked && payload.newlyUnlocked.length > 0) {
+        unlocksEl.classList.remove('hidden');
+        unlocksEl.textContent = '🎁 New cosmetic' + (payload.newlyUnlocked.length > 1 ? 's' : '') + ' unlocked - check the shop!';
+      } else {
+        unlocksEl.classList.add('hidden');
+        unlocksEl.textContent = '';
+      }
+      document.getElementById('tournament-round-result-modal').classList.remove('hidden');
+      if (!homeVisible) { if (payload.won) { swin(); if (payload.fullyWon) playVictoryEffect(); } else slose(); }
+    });
+    document.getElementById('btn-tournament-round-result-continue').addEventListener('click', () => {
+      document.getElementById('tournament-round-result-modal').classList.add('hidden');
+      leaveToHome();
+      showSitePage('tournament');
+    });
+
+    // ===== Spins =====
+    let spinStatus = null; // last GET /api/spins/status response
+    let spinInProgress = false;
+    let spinWheelRotationDeg = 0; // accumulated, never reset - each spin continues forward rather than snapping back to 0
+
+    // Builds the wheel as SVG pie slices (trig math is far less fiddly in
+    // SVG user-space than fighting CSS transform-origin for the same
+    // result) - alternating gold/dark slices, label text rotated to read
+    // radially outward from center. Segment 0 starts at the top (-90deg) so
+    // it lines up with the fixed pointer above the wheel.
+    function buildSpinWheelSVG(segments) {
+      const n = segments.length;
+      const cx = 150, cy = 150, r = 145;
+      const fillColors = ['#c9a84c', '#1a1826'];
+      const textColors = ['#0d0d1a', '#e8e4dc'];
+      let paths = '';
+      let labels = '';
+      for (let i = 0; i < n; i++) {
+        const startAngle = (i * 360) / n - 90;
+        const endAngle = ((i + 1) * 360) / n - 90;
+        const x1 = cx + r * Math.cos(startAngle * Math.PI / 180);
+        const y1 = cy + r * Math.sin(startAngle * Math.PI / 180);
+        const x2 = cx + r * Math.cos(endAngle * Math.PI / 180);
+        const y2 = cy + r * Math.sin(endAngle * Math.PI / 180);
+        const largeArc = (360 / n) > 180 ? 1 : 0;
+        const isJackpot = segments[i].key === 'jackpot300';
+        const fill = isJackpot ? '#9c6ade' : fillColors[i % 2];
+        paths += '<path d="M' + cx + ',' + cy + ' L' + x1.toFixed(2) + ',' + y1.toFixed(2) +
+          ' A' + r + ',' + r + ' 0 ' + largeArc + ' 1 ' + x2.toFixed(2) + ',' + y2.toFixed(2) +
+          ' Z" fill="' + fill + '" stroke="#0d0d0d" stroke-width="2" />';
+
+        const midAngle = (startAngle + endAngle) / 2;
+        const labelR = r * 0.62;
+        const lx = cx + labelR * Math.cos(midAngle * Math.PI / 180);
+        const ly = cy + labelR * Math.sin(midAngle * Math.PI / 180);
+        const textColor = isJackpot ? '#fff' : textColors[i % 2];
+        const rot = midAngle + 90;
+        labels += '<text x="' + lx.toFixed(2) + '" y="' + ly.toFixed(2) + '" fill="' + textColor +
+          '" font-size="' + (isJackpot ? 10 : 12) + '" font-weight="700" text-anchor="middle" ' +
+          'transform="rotate(' + rot.toFixed(2) + ', ' + lx.toFixed(2) + ', ' + ly.toFixed(2) + ')" ' +
+          'font-family="Inter, sans-serif">' + escapeHtml(segments[i].label) + '</text>';
+      }
+      return '<svg viewBox="0 0 300 300" id="spin-wheel-svg">' +
+        '<g id="spin-wheel-rotor">' + paths + labels + '</g></svg>';
+    }
+
+    function renderSpinsPage() {
+      if (!spinStatus) return;
+      document.getElementById('spins-coins-count').textContent = spinStatus.coins;
+      const svgWrap = document.getElementById('spin-wheel-svg-wrap');
+      if (!svgWrap.querySelector('#spin-wheel-rotor')) svgWrap.innerHTML = buildSpinWheelSVG(spinStatus.segments);
+      const canAfford = spinStatus.loggedIn && spinStatus.coins >= spinStatus.cost;
+      const btn = document.getElementById('btn-spin');
+      btn.disabled = spinInProgress || !spinStatus.loggedIn || !canAfford;
+      btn.textContent = !spinStatus.loggedIn ? 'Log In to Spin'
+        : (spinInProgress ? 'Spinning...' : (!canAfford ? 'Not Enough Coins' : 'SPIN (' + spinStatus.cost + ' 🪙)'));
+    }
+
+    async function loadSpinStatus() {
+      try {
+        const res = await fetch('/api/spins/status');
+        spinStatus = await res.json();
+        renderSpinsPage();
+      } catch (e) { console.error('loadSpinStatus failed:', e); }
+    }
+
+    // Bursts a few sparkle glyphs outward from the wheel's center every
+    // ~140ms for the duration of the spin - the "sparkles coming out of the
+    // wheel while it's spinning" flourish, independent of the wheel's own
+    // rotation animation.
+    const SPIN_SPARKLE_GLYPHS = ['✨', '⭐', '💫'];
+    function spawnSpinSparkles(durationMs) {
+      const container = document.getElementById('spin-sparkles');
+      if (!container) return;
+      const endTime = Date.now() + durationMs;
+      (function tick() {
+        if (Date.now() > endTime) return;
+        for (let i = 0; i < 3; i++) {
+          const angle = Math.random() * 360 * Math.PI / 180;
+          const el = document.createElement('div');
+          el.className = 'spin-sparkle';
+          el.textContent = SPIN_SPARKLE_GLYPHS[Math.floor(Math.random() * SPIN_SPARKLE_GLYPHS.length)];
+          el.style.setProperty('--sx', Math.cos(angle).toFixed(3));
+          el.style.setProperty('--sy', Math.sin(angle).toFixed(3));
+          container.appendChild(el);
+          setTimeout(() => el.remove(), 950);
+        }
+        setTimeout(tick, 140);
+      })();
+    }
+
+    // A quick electric "wheel charging up" run at the start of the spin,
+    // distinct from every other intro sound already in use elsewhere.
+    function sSpinStart() {
+      [294, 370, 466, 587].forEach((f, i) => setTimeout(() => beep(f, 0.09, 0.12, 'triangle'), i * 70));
+    }
+    // A bigger fanfare than the ordinary win chime, for the rare jackpot.
+    function sSpinJackpot() {
+      swin();
+      setTimeout(() => { beep(784, 0.14, 0.16); setTimeout(() => beep(1047, 0.14, 0.16), 110); setTimeout(() => beep(1319, 0.4, 0.2), 220); }, 420);
+    }
+
+    const SPIN_ANIMATION_MS = 5000;
+    function spinWheelTo(index, segment, onComplete) {
+      const n = spinStatus.segments.length;
+      const slice = 360 / n;
+      const targetCenter = index * slice + slice / 2;
+      const jitter = (Math.random() * (slice * 0.6)) - (slice * 0.3);
+      const fullSpins = 6;
+      // The rotor's own coordinate system draws segment i's center at
+      // compass angle (i*slice + slice/2) clockwise from the top (see
+      // buildSpinWheelSVG); the pointer is fixed at the top. Rotating the
+      // rotor by R moves a point that was at angle A to A+R, so landing
+      // `index` under the pointer needs R such that targetCenter+R is a
+      // multiple of 360 - plus several full turns for the spin itself.
+      const delta = ((360 - (targetCenter + jitter)) % 360 + 360) % 360;
+      spinWheelRotationDeg += fullSpins * 360 + delta;
+      const rotor = document.getElementById('spin-wheel-rotor');
+      if (rotor) rotor.style.transform = 'rotate(' + spinWheelRotationDeg + 'deg)';
+      sSpinStart();
+      spawnSpinSparkles(SPIN_ANIMATION_MS);
+      setTimeout(() => {
+        const isJackpot = segment.key === 'jackpot300';
+        if (isJackpot) { sSpinJackpot(); playVictoryEffect(); } else swin();
+        const el = document.getElementById('spin-result');
+        el.textContent = (isJackpot ? '🎉 JACKPOT! ' : '') + '+' + segment.amount + ' ' + (segment.type === 'xp' ? 'XP' : 'Coins');
+        el.className = isJackpot ? 'spin-result-jackpot' : ('spin-result-' + segment.type);
+        el.classList.remove('hidden');
+        onComplete();
+      }, SPIN_ANIMATION_MS);
+    }
+
+    document.getElementById('btn-spin').addEventListener('click', async () => {
+      if (!spinStatus || !spinStatus.loggedIn) { document.getElementById('auth-modal').classList.remove('hidden'); return; }
+      if (spinInProgress || spinStatus.coins < spinStatus.cost) return;
+      spinInProgress = true;
+      document.getElementById('spin-result').classList.add('hidden');
+      renderSpinsPage();
+      try {
+        const res = await fetch('/api/spins/spin', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          showToast(data.error || "Couldn't spin.", { className: 'toast-coins-loss' });
+          spinInProgress = false;
+          renderSpinsPage();
+          return;
+        }
+        spinWheelTo(data.index, data.segment, () => {
+          spinStatus.coins = data.coins;
+          if (currentUser) { currentUser.coins = data.coins; updateAuthUI(); }
+          spinInProgress = false;
+          renderSpinsPage();
+        });
+      } catch (e) {
+        console.error('spin failed:', e);
+        spinInProgress = false;
+        renderSpinsPage();
+      }
+    });
 
     function renderStats(state) {
       if (!state.stats) return;
@@ -2512,6 +4121,13 @@
         lastXpUpdate = null;
         pendingSessionComplete = null;
       }
+      // Same ordering guarantee as ranked above - rumbleSessionComplete (if
+      // this was hand 5) is always emitted before this handComplete, so it's
+      // already cached here with no race to coordinate.
+      if (pendingRumbleSessionComplete) {
+        showRumbleResultsScreen(pendingRumbleSessionComplete);
+        pendingRumbleSessionComplete = null;
+      }
     });
     socket.on('pauseGame', () => {
       document.getElementById('pause-modal').classList.remove('hidden');
@@ -2549,9 +4165,12 @@
         if (data.delta !== 0) {
           const sign = data.delta > 0 ? '+' : '';
           const parts = ['🪙 ' + sign + data.delta + (Math.abs(data.delta) === 1 ? ' Coin' : ' Coins')];
-          if (data.tier === 'bigWin') parts.push('Big Win!');
-          else if (data.tier === 'massiveWin') parts.push('Massive Win!');
-          if (data.streakBonus > 0) parts.push('🔥 ' + data.streakBonus + '-Win Streak!');
+          // tier is the bot difficulty the hand was played at (e.g. "easy",
+          // "expert") - only shown on a win, since the label is meant to
+          // explain where the coins came from, not restate a plain -1 loss.
+          if (data.tier && data.delta > 0) {
+            parts.push(data.tier.charAt(0).toUpperCase() + data.tier.slice(1) + ' Win');
+          }
           showToast(parts.join(' - '), { className: data.delta > 0 ? 'toast-coins' : 'toast-coins-loss' });
         }
       }
@@ -2595,12 +4214,19 @@
       requestAnimationFrame(() => { fillEl.style.width = toPct; });
 
       rankResultsContinueMode = sessionComplete ? 'home' : 'next';
+      // Play Again only makes sense once the session/tournament has actually
+      // ended - mid-tournament, "Continue" already means "next hand".
+      document.getElementById('btn-rank-results-again').classList.toggle('hidden', !sessionComplete);
       document.getElementById('rank-results-modal').classList.remove('hidden');
     }
     document.getElementById('btn-rank-results-continue').addEventListener('click', () => {
       document.getElementById('rank-results-modal').classList.add('hidden');
       if (rankResultsContinueMode === 'next') socket.emit('nextHand');
       else leaveToHome();
+    });
+    document.getElementById('btn-rank-results-again').addEventListener('click', () => {
+      document.getElementById('rank-results-modal').classList.add('hidden');
+      playRankedIntro(startRankedGame);
     });
 
     // ===== Actions =====

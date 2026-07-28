@@ -5,7 +5,7 @@ import { openDb } from "../src/db.js";
 import {
   hashPassword, verifyPassword, hashToken,
   createUser, findUserByEmail, findUserById,
-  issueSession, resolveSession, destroySession,
+  issueSession, resolveSession, destroySession, deleteAccount,
   isRateLimited, recordLoginFailure, clearLoginAttempts,
   toPublicUser, applyXpDelta,
 } from "../src/auth.js";
@@ -116,12 +116,21 @@ test("toPublicUser exposes only safe fields (never password hash/salt) plus the 
   const pub = toPublicUser(findUserById(db, userId));
   assert.deepEqual(
     Object.keys(pub).sort(),
-    ["coins", "displayName", "email", "equippedCardBack", "equippedFeltColor", "id", "rank", "totalXp"]
+    [
+      "coins", "displayName", "email",
+      "equippedCardBack", "equippedFeltColor", "equippedNameFlair",
+      "equippedRippleColor", "equippedTableTheme", "equippedVictoryEffect",
+      "id", "rank", "totalXp",
+    ]
   );
   assert.equal(pub.rank.label, "Bronze III"); // brand-new account, 0 XP
   assert.equal(pub.coins, 0); // brand-new account, no coins earned yet
   assert.equal(pub.equippedCardBack, "classic");
   assert.equal(pub.equippedFeltColor, "green");
+  assert.equal(pub.equippedRippleColor, "white");
+  assert.equal(pub.equippedNameFlair, "none");
+  assert.equal(pub.equippedTableTheme, "plain");
+  assert.equal(pub.equippedVictoryEffect, "none");
   assert.equal(toPublicUser(null), null);
 });
 
@@ -174,4 +183,53 @@ test("login rate limiter locks out after 5 failures and clearLoginAttempts reset
 
   clearLoginAttempts(key);
   assert.equal(isRateLimited(key), false, "clearLoginAttempts should reset the lockout");
+});
+
+test("deleteAccount removes the user row and returns true", async () => {
+  const db = freshDb();
+  const { hash, salt } = await hashPassword("password123");
+  const userId = createUser(db, { email: "delete-me@example.com", displayName: "DeleteMe", passwordHash: hash, passwordSalt: salt });
+
+  assert.equal(deleteAccount(db, userId), true);
+  assert.equal(findUserById(db, userId), undefined);
+});
+
+test("deleteAccount returns false for a user id that doesn't exist, without throwing", () => {
+  const db = freshDb();
+  assert.equal(deleteAccount(db, 99999), false);
+});
+
+test("deleteAccount also removes the user's sessions, cosmetic unlocks, and xp events", async () => {
+  const db = freshDb();
+  const { hash, salt } = await hashPassword("password123");
+  const userId = createUser(db, { email: "cleanup@example.com", displayName: "Cleanup", passwordHash: hash, passwordSalt: salt });
+
+  const { token } = issueSession(db, userId);
+  db.prepare("INSERT INTO user_unlocks (user_id, cosmetic_key, unlocked_at) VALUES (?, ?, ?)").run(userId, "cardBack:diamond", Date.now());
+  applyXpDelta(db, userId, 14);
+
+  assert.ok(db.prepare("SELECT * FROM sessions WHERE user_id = ?").get(userId));
+  assert.ok(db.prepare("SELECT * FROM user_unlocks WHERE user_id = ?").get(userId));
+  assert.ok(db.prepare("SELECT * FROM xp_events WHERE user_id = ?").get(userId));
+
+  deleteAccount(db, userId);
+
+  assert.equal(db.prepare("SELECT * FROM sessions WHERE user_id = ?").get(userId), undefined);
+  assert.equal(db.prepare("SELECT * FROM user_unlocks WHERE user_id = ?").get(userId), undefined);
+  assert.equal(db.prepare("SELECT * FROM xp_events WHERE user_id = ?").get(userId), undefined);
+  // The session token itself should no longer resolve to anyone, not just
+  // be silently orphaned in the sessions table.
+  assert.equal(resolveSession(db, token), null);
+});
+
+test("deleteAccount only removes the targeted user, leaving other accounts untouched", async () => {
+  const db = freshDb();
+  const { hash, salt } = await hashPassword("password123");
+  const keepId = createUser(db, { email: "keep@example.com", displayName: "Keep", passwordHash: hash, passwordSalt: salt });
+  const deleteId = createUser(db, { email: "gone@example.com", displayName: "Gone", passwordHash: hash, passwordSalt: salt });
+
+  deleteAccount(db, deleteId);
+
+  assert.ok(findUserById(db, keepId), "the other account should be unaffected");
+  assert.equal(findUserById(db, deleteId), undefined);
 });

@@ -30,6 +30,14 @@ export class BettingRound {
     // blinds/currentBet this round may have started with) - used to classify
     // preflop raises as an open (raiseCount was 0) vs a 3-bet+ (was >= 1).
     this.raiseCount = 0;
+    // Rumble's Freeze/Silence power-up (src/powerUps.js) sets this directly
+    // to a player id - while set, that player's legalActions() masks out
+    // raise/fold, forcing check-or-call only. Deliberately lives on the
+    // BettingRound instance (not Hand/TableGame) so it expires on its own
+    // the moment the street changes, since Hand._startStreet() always
+    // builds a brand-new BettingRound - no explicit cleanup needed to match
+    // the power-up's own "for the rest of this betting round" wording.
+    this.frozenPlayerId = null;
   }
 
   getPlayer(id) {
@@ -67,14 +75,18 @@ export class BettingRound {
     const canCheck = toCall === 0;
     const callAmount = Math.min(Math.max(toCall, 0), player.stack);
 
-    const canBet = this.currentBet === 0 && player.stack > 0;
-    const canRaise = this.currentBet > 0 && player.stack > toCall;
+    // Rumble's Freeze/Silence: forced to check/call only for the rest of
+    // this betting round - no raising, no folding (see this.frozenPlayerId's
+    // own comment in the constructor above).
+    const frozen = playerId === this.frozenPlayerId;
+    const canBet = !frozen && this.currentBet === 0 && player.stack > 0;
+    const canRaise = !frozen && this.currentBet > 0 && player.stack > toCall;
 
     const maxRaiseTo = player.contributed + player.stack; // all-in
     const minRaiseTo = Math.min(this.currentBet + this.minRaise, maxRaiseTo);
 
     return {
-      fold: true,
+      fold: !frozen,
       check: canCheck,
       call: toCall > 0,
       callAmount,
@@ -99,6 +111,11 @@ export class BettingRound {
     const legal = this.legalActions(playerId);
 
     if (action === "fold") {
+      // legal.fold was unconditionally true before Rumble's Freeze/Silence
+      // power-up existed, so this guard is a no-op for everyone else - it
+      // only actually restricts anything once a frozen player is involved.
+      // Never trust the client to have honored the greyed-out button.
+      if (!legal.fold) throw new Error(`${playerId} cannot fold right now`);
       player.folded = true;
     } else if (action === "check") {
       if (!legal.check) throw new Error(`${playerId} cannot check - there is a bet to call`);

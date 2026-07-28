@@ -11,10 +11,14 @@ import { parseCookies, serializeCookie } from "./src/cookies.js";
 import { openDb } from "./src/db.js";
 import * as auth from "./src/auth.js";
 import { getLeaderboard } from "./src/leaderboard.js";
-import { rankForXp } from "./src/rankTiers.js";
+import { rankForXp, RANK_TIERS } from "./src/rankTiers.js";
 import { RANKED_FIXED_SETTINGS, tournamentLengthForKey } from "./src/rankedConfig.js";
-import { claimDailyReward, hasUnclaimedDailyReward } from "./src/coins.js";
-import { getCatalogForUser, unlockCosmetic, equipCosmetic } from "./src/cosmetics.js";
+import { RUMBLE_FIXED_SETTINGS } from "./src/rumbleConfig.js";
+import { TOURNAMENT_FIXED_SETTINGS, TOURNAMENT_TIERS, TOURNAMENT_ROUNDS, TOURNAMENT_ROUNDS_TOTAL, findTournamentTier, tournamentRoundInfo, requiredRankLabelForTier, isTournamentTierUnlockedAtRank } from "./src/tournamentConfig.js";
+import { claimDailyReward, hasUnclaimedDailyReward, applyHandCoinsReward } from "./src/coins.js";
+import { SPIN_COST, SPIN_SEGMENTS, pickSpinSegment } from "./src/spinConfig.js";
+import { getCatalogForUser, unlockCosmetic, equipCosmetic, COSMETICS_CATALOG } from "./src/cosmetics.js";
+import { isBotUnlockedAtTier, requiredTierIndexForBot } from "./src/rankUnlocks.js";
 import { getDashboardStats } from "./src/analytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +54,21 @@ const db = openDb(DB_PATH);
 
 function emailLooksValid(email) {
   return typeof email === "string" && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+const EXPERIMENTAL_BOT_KEYS = new Set(["drunk", "bluffer", "rock", "maniac", "boardroom"]);
+
+// Only the 5 experimental bot personalities are rank-gated - the core
+// Easy/Medium/Hard/Expert ladder is open to everyone, always. A guest (no
+// account, so no rank at all) or an account that hasn't reached the
+// required tier yet gets coerced to Easy rather than rejected outright, so
+// requesting a locked bot degrades gracefully into a still-playable game.
+function resolveAllowedDifficulty(requestedDifficulty, user) {
+  if (!EXPERIMENTAL_BOT_KEYS.has(requestedDifficulty)) return requestedDifficulty;
+  if (!user) return "easy";
+  const row = db.prepare("SELECT highest_rank_tier_index FROM users WHERE id = ?").get(user.id);
+  const tierIndex = row ? row.highest_rank_tier_index : 0;
+  return isBotUnlockedAtTier(requestedDifficulty, tierIndex) ? requestedDifficulty : "easy";
 }
 
 // Every visitor gets a long-lived, httpOnly session id up front - this is
@@ -102,7 +121,12 @@ app.post("/api/signup", async (req, res) => {
 
   const { token, expiresAt } = auth.issueSession(db, userId);
   res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
-  res.json({ user: auth.toPublicUser(auth.findUserById(db, userId)), hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, userId) });
+  const newUser = auth.findUserById(db, userId);
+  res.json({
+    user: auth.toPublicUser(newUser),
+    hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, userId),
+    experimentalBots: buildExperimentalBotsPayload(newUser),
+  });
 });
 
 app.post("/api/login", async (req, res) => {
@@ -128,7 +152,11 @@ app.post("/api/login", async (req, res) => {
 
   const { token, expiresAt } = auth.issueSession(db, row.id);
   res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
-  res.json({ user: auth.toPublicUser(row), hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, row.id) });
+  res.json({
+    user: auth.toPublicUser(row),
+    hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, row.id),
+    experimentalBots: buildExperimentalBotsPayload(row),
+  });
 });
 
 app.post("/api/logout", (req, res) => {
@@ -138,12 +166,59 @@ app.post("/api/logout", (req, res) => {
   res.json({ ok: true });
 });
 
+// Permanently deletes the logged-in user's account and everything tied to
+// it (coins, cosmetics, rank/XP, ranked stats). Requires re-entering the
+// current password - a session cookie alone isn't enough proof of intent for
+// something this irreversible (e.g. a shared/unlocked browser shouldn't be
+// able to delete an account with just a click). The client is expected to
+// have already shown the player exactly what they're about to lose before
+// ever calling this.
+app.post("/api/account/delete", async (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+
+  const { password } = req.body || {};
+  if (typeof password !== "string" || !password) {
+    return res.status(400).json({ error: "Please enter your password to confirm." });
+  }
+  const valid = await auth.verifyPassword(password, user.password_salt, user.password_hash);
+  if (!valid) return res.status(401).json({ error: "Incorrect password." });
+
+  auth.deleteAccount(db, user.id);
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION }));
+  res.json({ ok: true });
+});
+
+// Lets the home/experimental pages show a lock overlay + the exact rank
+// still needed for each experimental bot, without duplicating rank-unlock
+// math client-side - the server-side gate in updateSettings is what
+// actually enforces this either way. Shared by every route that returns a
+// user's auth state (/api/me, /api/signup, /api/login) so all three stay
+// in sync rather than the client only learning this on the next page load.
+function buildExperimentalBotsPayload(user) {
+  const tierIndex = user ? user.highest_rank_tier_index : 0;
+  const experimentalBots = {};
+  for (const botKey of EXPERIMENTAL_BOT_KEYS) {
+    const unlocked = isBotUnlockedAtTier(botKey, tierIndex);
+    const requiredIdx = requiredTierIndexForBot(botKey);
+    experimentalBots[botKey] = { unlocked, unlockRank: unlocked || requiredIdx == null ? null : RANK_TIERS[requiredIdx].label };
+  }
+  return experimentalBots;
+}
+
 app.get("/api/me", (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
   res.json({
     user: auth.toPublicUser(user),
     hasUnclaimedDailyReward: user ? hasUnclaimedDailyReward(db, user.id) : false,
+    experimentalBots: buildExperimentalBotsPayload(user),
+    // Static, tiny (16 entries) - sent straight from the same RANK_TIERS
+    // array everything else resolves rank labels/thresholds from, so a
+    // client-side rank-ladder display can never drift out of sync with the
+    // server's own tier definitions.
+    rankTiers: RANK_TIERS,
   });
 });
 
@@ -169,6 +244,13 @@ app.get("/api/cosmetics", (req, res) => {
   res.json(getCatalogForUser(db, user.id));
 });
 
+// Derived straight from the real catalog rather than a hand-maintained list -
+// a stale hardcoded whitelist here (cardBack/feltColor only) previously left
+// the other 4 categories (rippleColor/nameFlair/tableTheme/victoryEffect)
+// completely unreachable through these routes for months after they were
+// added to the catalog, since nothing ever re-synced this check against it.
+const VALID_COSMETIC_CATEGORIES = new Set(Object.keys(COSMETICS_CATALOG));
+
 // Spends coins to unlock a cosmetic - server validates cost, ownership, and
 // balance itself; never trusts a client-sent claim of any of it.
 app.post("/api/cosmetics/unlock", (req, res) => {
@@ -176,7 +258,7 @@ app.post("/api/cosmetics/unlock", (req, res) => {
   const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
   if (!user) return res.status(401).json({ error: "Not logged in." });
   const { category, key } = req.body || {};
-  if (category !== "cardBack" && category !== "feltColor") {
+  if (!VALID_COSMETIC_CATEGORIES.has(category)) {
     return res.status(400).json({ error: "Unknown cosmetic category." });
   }
   const result = unlockCosmetic(db, user.id, category, String(key || ""));
@@ -191,7 +273,7 @@ app.post("/api/cosmetics/equip", (req, res) => {
   const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
   if (!user) return res.status(401).json({ error: "Not logged in." });
   const { category, key } = req.body || {};
-  if (category !== "cardBack" && category !== "feltColor") {
+  if (!VALID_COSMETIC_CATEGORIES.has(category)) {
     return res.status(400).json({ error: "Unknown cosmetic category." });
   }
   const result = equipCosmetic(db, user.id, category, String(key || ""));
@@ -200,14 +282,14 @@ app.post("/api/cosmetics/equip", (req, res) => {
   res.json(result);
 });
 
-// A user's own profile - ranked-match stats only, per how it's scoped on the
-// client. No lookup-by-id yet (just "view your own"), but the shape here has
-// room to grow into that later without a breaking change.
-app.get("/api/profile", (req, res) => {
-  const cookies = parseCookies(req.headers.cookie);
-  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
-  if (!user) return res.status(401).json({ error: "Not logged in." });
-  res.json({
+// Ranked-match stats shape shared by "view your own profile" (/api/profile,
+// auth-required) and "view anyone's public profile" (/api/users/:id/public-
+// profile, no auth needed) below - deliberately leaves out anything private
+// (email, coins, cosmetics ownership, login streak, admin flag): those two
+// routes differ only in how they resolve the target user row, not in what
+// they're willing to show.
+function profileStatsPayload(user) {
+  return {
     displayName: user.display_name,
     rank: rankForXp(user.total_xp),
     totalXp: user.total_xp,
@@ -222,15 +304,41 @@ app.get("/api/profile", (req, res) => {
     showdownsSeen: user.showdowns_seen,
     showdownsWon: user.showdowns_won,
     wsdPct: user.showdowns_seen > 0 ? user.showdowns_won / user.showdowns_seen : null,
-  });
+  };
+}
+
+// A user's own profile - ranked-match stats only, per how it's scoped on the
+// client.
+app.get("/api/profile", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  res.json(profileStatsPayload(user));
 });
 
-// Public - no auth needed to view who's on top, only to appear on it.
+// Public profile by id - anyone (logged in or not) can view any account's
+// same ranked-match stats shown on the leaderboard/their own profile - this
+// is what a leaderboard row's click opens. 404s rather than exposing
+// whether an id is simply out of range vs genuinely nonexistent (both look
+// identical to the caller either way).
+app.get("/api/users/:id/public-profile", (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: "Invalid user id." });
+  const user = auth.findUserById(db, id);
+  if (!user) return res.status(404).json({ error: "User not found." });
+  res.json(profileStatsPayload(user));
+});
+
+// Public - no auth needed to view who's on top, only to appear on it. limit
+// is client-controlled (the home page widget asks for 5) but always clamped
+// server-side to a sane max, regardless of what's requested.
 app.get("/api/leaderboard", (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
   const period = req.query.period === "week" ? "week" : "all";
-  res.json(getLeaderboard(db, user ? user.id : null, 50, period));
+  const requestedLimit = parseInt(req.query.limit, 10);
+  const limit = Number.isInteger(requestedLimit) && requestedLimit > 0 ? Math.min(requestedLimit, 50) : 50;
+  res.json(getLeaderboard(db, user ? user.id : null, limit, period));
 });
 
 // Internal-only growth/retention dashboard - never linked from the
@@ -246,6 +354,175 @@ app.get("/api/admin/stats", (req, res) => {
 });
 
 const registry = new SessionRegistry(io, db);
+
+// ===== Tournament mode (paid entry, escalating-difficulty, solo-only) =====
+// Unlike Ranked/Rumble, a run's progress is durable (tournament_runs in
+// src/db.js) rather than living purely on the in-memory TableGame session -
+// coins are non-refundably staked across up to 5 separate 10-hand rounds,
+// potentially played across many sittings, so "which round am I on" has to
+// survive a disconnect or server restart. These REST routes own all the
+// money/administrative writes (enter, exit); the actual live poker for a
+// round still flows through the normal socket/TableGame path (see the
+// beginTournamentRound handler below) and only reports a round's OUTCOME
+// back through src/sessionRegistry.js's tournamentRoundComplete listener.
+// Placed after `registry` (rather than up with the other REST routes above)
+// since /api/tournament/exit needs it to reach into a live session.
+
+// Shapes TOURNAMENT_TIERS for client display - attaches the human-readable
+// rank requirement label and whether THIS player (permanent
+// highest_rank_tier_index high-water mark, or 0 for a guest/no rank yet) has
+// actually met it, so the client never has to duplicate the gating logic
+// itself, only render what the server already decided. Never mutates the
+// underlying config array.
+function tiersForDisplay(userTierIndex) {
+  return TOURNAMENT_TIERS.map((t) => ({
+    ...t,
+    requiredRankLabel: requiredRankLabelForTier(t.key),
+    rankUnlocked: isTournamentTierUnlockedAtRank(t.key, userTierIndex),
+  }));
+}
+
+// Public - tier/round definitions are just static config, safe to show a
+// logged-out visitor deciding whether to sign up. coins/activeRun are only
+// ever meaningful once resolveSession finds a real user. A guest sees every
+// rank-gated tier as locked (rankUnlocked:false) - they'd need an account
+// and a rank to enter regardless, this just keeps the shape consistent.
+app.get("/api/tournament/status", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) {
+    return res.json({ loggedIn: false, coins: 0, tiers: tiersForDisplay(0), rounds: TOURNAMENT_ROUNDS, activeRun: null });
+  }
+  const row = db.prepare("SELECT coins, highest_rank_tier_index FROM users WHERE id = ?").get(user.id);
+  const runRow = db.prepare("SELECT * FROM tournament_runs WHERE user_id = ? AND ended_at IS NULL").get(user.id);
+  const activeRun = runRow
+    ? { id: runRow.id, tierKey: runRow.tier_key, roundsCompleted: runRow.rounds_completed, startedAt: runRow.started_at }
+    : null;
+  res.json({
+    loggedIn: true,
+    coins: row ? row.coins : 0,
+    tiers: tiersForDisplay(row ? row.highest_rank_tier_index : 0),
+    rounds: TOURNAMENT_ROUNDS,
+    activeRun,
+  });
+});
+
+// Pays the entry fee (non-refundable from this point on) and starts a new
+// run. Inserts the run FIRST, only deducts coins once that succeeds - if a
+// concurrent request (double-click, two tabs) already inserted an active
+// run, the partial unique index (idx_tournament_active_run) makes this
+// insert throw before any coins are ever touched, so there's nothing to
+// refund on the conflict path.
+app.post("/api/tournament/enter", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+  const tier = findTournamentTier((req.body && req.body.tierKey) || "");
+  if (!tier) return res.status(400).json({ error: "Unknown tournament tier." });
+
+  const row = db.prepare("SELECT coins, highest_rank_tier_index FROM users WHERE id = ?").get(user.id);
+  if (!row) return res.status(404).json({ error: "User not found." });
+  // Rank gate is always re-checked here against the permanent high-water
+  // mark, never trusting whatever the client's own UI happened to show -
+  // same discipline as resolveAllowedDifficulty's experimental-bot gate.
+  if (!isTournamentTierUnlockedAtRank(tier.key, row.highest_rank_tier_index)) {
+    return res.status(400).json({ error: `Requires ${requiredRankLabelForTier(tier.key)} rank to enter.` });
+  }
+  if (row.coins < tier.entryFee) return res.status(400).json({ error: "Not enough coins." });
+
+  const now = Date.now();
+  let info;
+  try {
+    info = db.prepare(
+      "INSERT INTO tournament_runs (user_id, tier_key, started_at, entry_fee_paid) VALUES (?, ?, ?, ?)"
+    ).run(user.id, tier.key, now, tier.entryFee);
+  } catch (err) {
+    return res.status(400).json({ error: "You already have an active tournament." });
+  }
+  const newCoins = row.coins - tier.entryFee;
+  db.prepare("UPDATE users SET coins = ? WHERE id = ?").run(newCoins, user.id);
+  res.json({
+    ok: true,
+    coins: newCoins,
+    activeRun: { id: Number(info.lastInsertRowid), tierKey: tier.key, roundsCompleted: 0, startedAt: now },
+  });
+});
+
+// Forfeits the active run - no refund of the entry fee. If a round happens
+// to be in flight on this browser's live TableGame session, also cancels
+// tournament mode on it so that hand just finishes as ordinary, non-
+// tournament poker instead of handleHandComplete() trying to report a round
+// outcome into a run that's already closed (see TableGame.cancelTournamentMode
+// and SessionRegistry's tournamentRoundComplete guard, which would otherwise
+// just silently ignore the stale event anyway - this is belt-and-suspenders,
+// not strictly required for correctness).
+app.post("/api/tournament/exit", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+
+  const run = db.prepare("SELECT * FROM tournament_runs WHERE user_id = ? AND ended_at IS NULL").get(user.id);
+  if (!run) return res.status(400).json({ error: "No active tournament to exit." });
+
+  db.prepare("UPDATE tournament_runs SET ended_at = ?, won = 0 WHERE id = ?").run(Date.now(), run.id);
+
+  const entry = registry.sessions.get(req.ppSessionId);
+  if (entry && entry.tableGame.tournamentRunId === run.id) {
+    entry.tableGame.cancelTournamentMode();
+  }
+  res.json({ ok: true });
+});
+
+// ===== Spins wheel =====
+// A standalone, instant coin/XP gamble - unlike Tournament there's no
+// multi-step run to track, so this is a single REST call rather than a
+// socket-driven flow: charge SPIN_COST, roll a reward, apply it, respond
+// with everything the client needs to animate the wheel and show the
+// result. Placed after `registry` since XP application below delegates to
+// SessionRegistry's own rank-up cascade (_handleXpEarned).
+
+// Public - the segment list/cost are static config, safe to show a
+// logged-out visitor. coins is only meaningful once resolveSession finds a
+// real user.
+app.get("/api/spins/status", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.json({ loggedIn: false, coins: 0, cost: SPIN_COST, segments: SPIN_SEGMENTS });
+  const row = db.prepare("SELECT coins FROM users WHERE id = ?").get(user.id);
+  res.json({ loggedIn: true, coins: row ? row.coins : 0, cost: SPIN_COST, segments: SPIN_SEGMENTS });
+});
+
+// Charges the (non-refundable) spin cost BEFORE rolling the reward - same
+// "pay first" discipline as Tournament entry, so a problem applying the
+// reward can never result in a free spin. Coin rewards are applied directly
+// here and returned in the response (same pattern as claim-daily-reward);
+// XP rewards are delegated to registry._handleXpEarned so a spin that
+// happens to cross a rank tier gets the exact same coin-bonus/unlock
+// cascade and live xpUpdate/coinsUpdate broadcast a ranked hand would.
+app.post("/api/spins/spin", (req, res) => {
+  const cookies = parseCookies(req.headers.cookie);
+  const user = auth.resolveSession(db, cookies[AUTH_COOKIE]);
+  if (!user) return res.status(401).json({ error: "Not logged in." });
+
+  const row = db.prepare("SELECT coins FROM users WHERE id = ?").get(user.id);
+  if (!row) return res.status(404).json({ error: "User not found." });
+  if (row.coins < SPIN_COST) return res.status(400).json({ error: "Not enough coins." });
+
+  db.prepare("UPDATE users SET coins = ? WHERE id = ?").run(row.coins - SPIN_COST, user.id);
+
+  const { segment, index } = pickSpinSegment();
+  if (segment.type === "coins") {
+    applyHandCoinsReward(db, user.id, segment.amount);
+  } else if (segment.type === "xp") {
+    registry._handleXpEarned(req.ppSessionId, user.id, segment.amount);
+  }
+
+  // Re-read fresh rather than computing the delta locally - a rank-up
+  // triggered by the XP branch above can award its own coin bonus, which
+  // this response's coins field needs to reflect.
+  const finalRow = db.prepare("SELECT coins FROM users WHERE id = ?").get(user.id);
+  res.json({ ok: true, index, segment, coins: finalRow ? finalRow.coins : row.coins - SPIN_COST });
+});
 
 io.on("connection", (socket) => {
   const cookies = parseCookies(socket.handshake.headers.cookie);
@@ -354,6 +631,53 @@ io.on("connection", (socket) => {
     tg.startNewHand();
   });
 
+  // Rumble power-up activation - v1 is solo-vs-bots only (no room-mode
+  // Rumble table exists yet), same "solo-only for now" scoping already used
+  // for hand analysis below. applyPowerUp() itself re-validates turn
+  // ownership/availability server-side - never trusts the client's own idea
+  // of whose turn it is or what they still have.
+  socket.on("usePowerUp", ({ target } = {}) => {
+    if (socket.data.roomCode) return;
+    const tg = activeGame();
+    if (!tg) return;
+    tg.applyPowerUp(activePlayerId(), target);
+  });
+
+  // Starts (or resumes) the next round of the caller's active tournament run.
+  // Solo-only, like Rumble - deliberately a standalone event rather than
+  // reusing updateSettings, since tournament difficulty is 100% server-
+  // derived from the run's own progress and never a client choice, unlike
+  // Rumble's updateSettings, which still legitimately trusts a client-picked
+  // difficulty. Ack-style (like createRoom/joinRoom) so the client knows
+  // definitively whether the round actually started before switching its UI
+  // over to the live table.
+  socket.on("beginTournamentRound", (payload, ack) => {
+    const respond = (result) => { if (typeof ack === "function") ack(result); };
+    if (socket.data.roomCode) return respond({ ok: false, error: "Tournament mode isn't available in rooms." });
+    if (!socket.data.user) return respond({ ok: false, error: "Not logged in." });
+
+    const run = db.prepare("SELECT * FROM tournament_runs WHERE user_id = ? AND ended_at IS NULL").get(socket.data.user.id);
+    if (!run) return respond({ ok: false, error: "No active tournament." });
+
+    const nextRound = run.rounds_completed + 1;
+    const info = tournamentRoundInfo(nextRound);
+    if (!info) return respond({ ok: false, error: "This tournament is already complete." });
+
+    // Idempotency: if this exact round is already underway on this table
+    // (the player navigated away mid-round and came back), just report it
+    // as already started rather than re-dealing - this is what makes
+    // "resume mid-round" work with no separate resume UI needed.
+    if (tableGame.tournamentMode && tableGame.tournamentRunId === run.id && tableGame.tournamentRoundNumber === nextRound) {
+      return respond({ ok: true, roundNumber: nextRound, label: info.label, resumed: true });
+    }
+
+    tableGame.setHumanUserId(socket.data.user.id);
+    tableGame.updateSettings({ ...TOURNAMENT_FIXED_SETTINGS, difficulty: info.difficulty });
+    tableGame.setTournamentMode(true, { runId: run.id, roundNumber: nextRound });
+    tableGame.startGame();
+    respond({ ok: true, roundNumber: nextRound, label: info.label, resumed: false });
+  });
+
   // Bot customization - meaningless in room mode (no bots), harmless no-op there.
   socket.on("updateBotCustomization", (customization) => {
     const tg = activeGame();
@@ -424,16 +748,29 @@ io.on("connection", (socket) => {
     // Independent of ranked status - coins are earned in every solo mode,
     // not just ranked, so this always reflects whoever's actually logged in.
     tableGame.setHumanUserId(socket.data.user ? socket.data.user.id : null);
+    // The 5 experimental bot personalities are gated behind rank milestones
+    // (src/rankUnlocks.js) - never trust the client's own idea of whether
+    // it's unlocked, same discipline as everything else resolved from
+    // socket.data.user below. A guest or an under-ranked account requesting
+    // one gets silently coerced to Easy instead.
+    const safeDifficulty = resolveAllowedDifficulty(config && config.difficulty, socket.data.user);
     const wantsRanked = !!(config && config.ranked) && !!socket.data.user;
+    const wantsRumble = !!(config && config.rumbleMode) && !wantsRanked;
     if (wantsRanked) {
       // Ranked ignores every client-sent table setting except difficulty -
       // fixed, immutable settings so every competitor plays under the same
       // conditions. Never trust the client for this, same as userId below.
-      tableGame.updateSettings({ ...RANKED_FIXED_SETTINGS, difficulty: config && config.difficulty });
+      tableGame.updateSettings({ ...RANKED_FIXED_SETTINGS, difficulty: safeDifficulty });
       const tournamentHands = tournamentLengthForKey(config && config.tournamentKey);
       tableGame.setRankedMode(true, socket.data.user.id, tournamentHands);
+    } else if (wantsRumble) {
+      // Same discipline as ranked - stack/blinds/shot clock/seat count are
+      // fixed (RUMBLE_FIXED_SETTINGS), never trusted from the client. The
+      // bot difficulty is still the player's own choice, same as unranked.
+      tableGame.updateSettings({ ...RUMBLE_FIXED_SETTINGS, difficulty: safeDifficulty, rumbleMode: true });
+      tableGame.setRankedMode(false, null);
     } else {
-      tableGame.updateSettings(config);
+      tableGame.updateSettings({ ...config, difficulty: safeDifficulty });
       tableGame.setRankedMode(false, null);
     }
   });

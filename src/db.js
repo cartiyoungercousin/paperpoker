@@ -27,8 +27,13 @@ const SCHEMA = `
     last_daily_reward_at INTEGER,
     equipped_card_back TEXT NOT NULL DEFAULT 'classic',
     equipped_felt_color TEXT NOT NULL DEFAULT 'green',
+    equipped_ripple_color TEXT NOT NULL DEFAULT 'white',
+    equipped_name_flair TEXT NOT NULL DEFAULT 'none',
+    equipped_table_theme TEXT NOT NULL DEFAULT 'plain',
+    equipped_victory_effect TEXT NOT NULL DEFAULT 'none',
     is_admin INTEGER NOT NULL DEFAULT 0,
-    last_active_at INTEGER
+    last_active_at INTEGER,
+    highest_rank_tier_index INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
@@ -58,6 +63,36 @@ const SCHEMA = `
     delta INTEGER NOT NULL,
     created_at INTEGER NOT NULL
   );
+
+  -- One row per Tournament mode attempt. Durable, unlike Ranked/Rumble's
+  -- purely in-memory TableGame-session state - a tournament run spans up to
+  -- 5 separate 10-hand rounds, potentially played across many separate
+  -- sittings, with real coins non-refundably staked, so which round the
+  -- player is on has to survive a disconnect/restart, not just live on the
+  -- TableGame instance. ended_at IS NULL means the run is still active (in
+  -- progress or between rounds); once set, rounds_completed/won are final.
+  -- COUNT(*) WHERE won=1 for a given (user_id, tier_key) is already a
+  -- correct, monotonically-non-decreasing lifetime win count for reward
+  -- thresholds - no separate high-water-mark column needed the way
+  -- highest_rank_tier_index is for rank tiers (this table is insert-only and
+  -- won is never un-set once true, unlike total_xp which can dip).
+  CREATE TABLE IF NOT EXISTS tournament_runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tier_key TEXT NOT NULL,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    rounds_completed INTEGER NOT NULL DEFAULT 0,
+    won INTEGER NOT NULL DEFAULT 0,
+    entry_fee_paid INTEGER NOT NULL,
+    payout_awarded INTEGER NOT NULL DEFAULT 0
+  );
+
+  -- Enforces "one active run per user" at the DB level, not just app logic -
+  -- a concurrent double-entry attempt (double-click, two tabs) throws on
+  -- insert rather than silently creating two simultaneous runs.
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_tournament_active_run
+    ON tournament_runs(user_id) WHERE ended_at IS NULL;
 `;
 
 // CREATE TABLE IF NOT EXISTS only helps a table that doesn't exist yet - it's
@@ -79,6 +114,16 @@ const USERS_COLUMN_MIGRATIONS = [
   { name: "equipped_felt_color", ddl: "ALTER TABLE users ADD COLUMN equipped_felt_color TEXT NOT NULL DEFAULT 'green'" },
   { name: "is_admin", ddl: "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0" },
   { name: "last_active_at", ddl: "ALTER TABLE users ADD COLUMN last_active_at INTEGER" },
+  { name: "equipped_ripple_color", ddl: "ALTER TABLE users ADD COLUMN equipped_ripple_color TEXT NOT NULL DEFAULT 'white'" },
+  { name: "equipped_name_flair", ddl: "ALTER TABLE users ADD COLUMN equipped_name_flair TEXT NOT NULL DEFAULT 'none'" },
+  { name: "equipped_table_theme", ddl: "ALTER TABLE users ADD COLUMN equipped_table_theme TEXT NOT NULL DEFAULT 'plain'" },
+  { name: "equipped_victory_effect", ddl: "ALTER TABLE users ADD COLUMN equipped_victory_effect TEXT NOT NULL DEFAULT 'none'" },
+  // Highest RANK_TIERS index ever reached (see src/rankUnlocks.js) - a
+  // permanent high-water mark, distinct from total_xp (which can dip after
+  // a rough ranked session). Rank-gated cosmetic/bot unlocks and the
+  // one-time coin bonus per rank-up all key off this, not off live XP, so
+  // nothing already earned can be re-locked by a later loss streak.
+  { name: "highest_rank_tier_index", ddl: "ALTER TABLE users ADD COLUMN highest_rank_tier_index INTEGER NOT NULL DEFAULT 0" },
 ];
 
 function migrateUsersTable(db) {

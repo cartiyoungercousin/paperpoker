@@ -32,8 +32,24 @@ const app = express();
 // connection - both the Secure cookie flag below and the login rate
 // limiter's IP-based key depend on this being accurate.
 app.set("trust proxy", 1);
+// Matches any CrazyGames domain (subdomains + regional TLD variants, e.g.
+// www.crazygames.com, de.crazygames.com, www.crazygames.co.kr) - see
+// https://docs.crazygames.com/resources/html5/sitelock/ for the exact list
+// this is meant to cover. Deliberately an allowlist, not a wildcard: a
+// same-origin request from the standalone site never even sends an Origin
+// header that reaches this check (browsers only send Origin, and only
+// enforce CORS, on cross-origin requests in the first place), so this can
+// never affect standalone-site traffic either way. Shared between the
+// socket.io server's own CORS handling below (it does its own origin check
+// independent of Express) and the plain HTTP CORS middleware further down.
+const CRAZYGAMES_ORIGIN_RE = /^https:\/\/([a-z0-9-]+\.)*crazygames\.[a-z.]{2,6}$/i;
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: (origin, cb) => cb(null, !origin || CRAZYGAMES_ORIGIN_RE.test(origin)),
+    credentials: true,
+  },
+});
 
 const SESSION_COOKIE = "ppSession";
 const SESSION_MAX_AGE = 30 * 24 * 60 * 60; // 30 days, in seconds
@@ -42,6 +58,14 @@ const AUTH_COOKIE = "ppAuth";
 // http://localhost dev server would otherwise never receive them back from
 // the browser at all, breaking login during development.
 const IS_PRODUCTION = process.env.NODE_ENV === "production";
+// SameSite=None is required for cookies to be sent on cross-origin requests
+// (e.g. this game embedded in an iframe hosted on a CrazyGames domain,
+// calling back to this server for /api/... and socket.io) - but browsers
+// reject SameSite=None without Secure, so this only ever applies once
+// IS_PRODUCTION is already forcing Secure on too. Same-site/direct
+// navigation (the standalone site's own normal use) is unaffected either
+// way - SameSite only restricts cross-site sending, never same-site.
+const COOKIE_SAME_SITE = IS_PRODUCTION ? "None" : "Lax";
 
 // Merely importing this module (as every test/*.test.js file does, to reuse
 // TableGame/buildHandAnalysis) would otherwise create a real sqlite file on
@@ -72,6 +96,20 @@ function resolveAllowedDifficulty(requestedDifficulty, user) {
   return isBotUnlockedAtTier(requestedDifficulty, tierIndex) ? requestedDifficulty : "easy";
 }
 
+// CORS handling for plain fetch() calls to /api/... (the socket.io server
+// above has its own separate cors option - this covers everything else).
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && CRAZYGAMES_ORIGIN_RE.test(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // Every visitor gets a long-lived, httpOnly session id up front - this is
 // what lets each browser get its own isolated TableGame instead of everyone
 // colliding in one global game (see SessionRegistry). Set here, on the plain
@@ -81,7 +119,7 @@ app.use((req, res, next) => {
   const cookies = parseCookies(req.headers.cookie);
   if (!cookies[SESSION_COOKIE]) {
     const sessionId = crypto.randomUUID();
-    res.setHeader("Set-Cookie", serializeCookie(SESSION_COOKIE, sessionId, { maxAge: SESSION_MAX_AGE, secure: IS_PRODUCTION }));
+    res.setHeader("Set-Cookie", serializeCookie(SESSION_COOKIE, sessionId, { maxAge: SESSION_MAX_AGE, secure: IS_PRODUCTION, sameSite: COOKIE_SAME_SITE }));
     req.ppSessionId = sessionId;
     // Logged once per newly-minted session cookie (see site_visits' own
     // schema comment for why this is the right hook point, not every
@@ -125,7 +163,7 @@ app.post("/api/signup", async (req, res) => {
   }
 
   const { token, expiresAt } = auth.issueSession(db, userId);
-  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION, sameSite: COOKIE_SAME_SITE }));
   const newUser = auth.findUserById(db, userId);
   res.json({
     user: auth.toPublicUser(newUser),
@@ -156,7 +194,7 @@ app.post("/api/login", async (req, res) => {
   auth.clearLoginAttempts(rateLimitKey);
 
   const { token, expiresAt } = auth.issueSession(db, row.id);
-  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION }));
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, token, { maxAge: Math.floor((expiresAt - Date.now()) / 1000), secure: IS_PRODUCTION, sameSite: COOKIE_SAME_SITE }));
   res.json({
     user: auth.toPublicUser(row),
     hasUnclaimedDailyReward: hasUnclaimedDailyReward(db, row.id),
@@ -167,7 +205,7 @@ app.post("/api/login", async (req, res) => {
 app.post("/api/logout", (req, res) => {
   const cookies = parseCookies(req.headers.cookie);
   auth.destroySession(db, cookies[AUTH_COOKIE]);
-  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION }));
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION, sameSite: COOKIE_SAME_SITE }));
   res.json({ ok: true });
 });
 
@@ -191,7 +229,7 @@ app.post("/api/account/delete", async (req, res) => {
   if (!valid) return res.status(401).json({ error: "Incorrect password." });
 
   auth.deleteAccount(db, user.id);
-  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION }));
+  res.setHeader("Set-Cookie", serializeCookie(AUTH_COOKIE, "", { maxAge: 0, secure: IS_PRODUCTION, sameSite: COOKIE_SAME_SITE }));
   res.json({ ok: true });
 });
 

@@ -1210,7 +1210,38 @@
 
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
-    const socket = io();
+    // Empty by default - every fetch()/socket.io call below is prefixed with
+    // this, which is a no-op ('' + '/api/x' === '/api/x') so the standalone
+    // site's same-origin requests are byte-for-byte unchanged. Only a build
+    // step for a specific external hosting context (e.g. a CrazyGames CDN
+    // upload, which serves this file from a different origin than the
+    // backend) would ever replace this with a real absolute URL - never
+    // edit this by hand for the standalone deployment.
+    const API_BASE = '';
+    // withCredentials: true is what makes the socket.io handshake actually
+    // send the ppSession/ppAuth cookies on a cross-origin connection (the
+    // CrazyGames-embedded case) - a no-op for the standalone site's own
+    // same-origin connection, which already sends cookies by default.
+    const socket = io(API_BASE || undefined, { withCredentials: true });
+
+    // Guarded CrazyGames SDK hooks - window.CrazyGames only exists if the
+    // SDK script tag was loaded, which never happens on the standalone site
+    // (the tag itself is only ever added by the CrazyGames-bundle build
+    // step, never committed to this file - see scripts/build-crazygames-
+    // bundle.js) or in local/non-CrazyGames testing. These are permanent,
+    // unconditional no-ops everywhere except an actual CrazyGames-hosted
+    // build, so they're safe to leave in source rather than needing their
+    // own build-time injection.
+    function cgSdkInit() {
+      if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.init();
+    }
+    function cgGameplayStart() {
+      if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStart();
+    }
+    function cgGameplayStop() {
+      if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStop();
+    }
+    cgSdkInit();
     const SS = { h:'♥', d:'♦', c:'♣', s:'♠' };
     const SC = { h:'#d32f2f', d:'#d32f2f', c:'#1a1a2e', s:'#1a1a2e' };
     const RD = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
@@ -2118,7 +2149,7 @@
     async function refreshAuthState() {
       let hasUnclaimedDailyReward = false;
       try {
-        const res = await fetch('/api/me');
+        const res = await fetch(API_BASE + '/api/me', { credentials: 'include' });
         const data = await res.json();
         currentUser = data.user || null;
         hasUnclaimedDailyReward = !!data.hasUnclaimedDailyReward;
@@ -2147,7 +2178,7 @@
       if (btn.textContent !== 'Claim') { modal.classList.add('hidden'); return; }
       btn.disabled = true;
       try {
-        const res = await fetch('/api/claim-daily-reward', { method: 'POST' });
+        const res = await fetch(API_BASE + '/api/claim-daily-reward', { method: 'POST', credentials: 'include' });
         const result = await res.json();
         if (res.ok && result.claimed) {
           document.getElementById('daily-reward-coins-amount').textContent = '+' + result.amount + ' Coins';
@@ -2189,8 +2220,9 @@
       const errEl = document.getElementById('login-error');
       errEl.classList.add('hidden');
       try {
-        const res = await fetch('/api/login', {
+        const res = await fetch(API_BASE + '/api/login', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password }),
         });
@@ -2218,8 +2250,9 @@
       const errEl = document.getElementById('signup-error');
       errEl.classList.add('hidden');
       try {
-        const res = await fetch('/api/signup', {
+        const res = await fetch(API_BASE + '/api/signup', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password, displayName }),
         });
@@ -2240,7 +2273,7 @@
     });
 
     document.getElementById('btn-logout').addEventListener('click', async () => {
-      try { await fetch('/api/logout', { method: 'POST' }); } catch (e) {}
+      try { await fetch(API_BASE + '/api/logout', { method: 'POST', credentials: 'include' }); } catch (e) {}
       currentUser = null;
       experimentalBotsInfo = {};
       updateAuthUI();
@@ -2254,7 +2287,7 @@
     async function openProfile() {
       if (!currentUser) { console.warn('openProfile: no currentUser, nothing to show'); return; }
       try {
-        const res = await fetch('/api/profile');
+        const res = await fetch(API_BASE + '/api/profile', { credentials: 'include' });
         if (!res.ok) { console.error('openProfile: /api/profile returned', res.status); return; }
         const p = await res.json();
 
@@ -2300,7 +2333,7 @@
       // of a second, worse view of the same account.
       if (currentUser && userId === currentUser.id) { openProfile(); return; }
       try {
-        const res = await fetch('/api/users/' + userId + '/public-profile');
+        const res = await fetch(API_BASE + '/api/users/' + userId + '/public-profile', { credentials: 'include' });
         if (!res.ok) { console.error('openPublicProfile: request returned', res.status); return; }
         const p = await res.json();
 
@@ -2351,8 +2384,9 @@
       const confirmBtn = document.getElementById('btn-confirm-delete-account');
       confirmBtn.disabled = true;
       try {
-        const res = await fetch('/api/account/delete', {
+        const res = await fetch(API_BASE + '/api/account/delete', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ password }),
         });
@@ -2442,7 +2476,7 @@
     }
 
     async function loadCustomizeShop() {
-      const res = await fetch('/api/cosmetics');
+      const res = await fetch(API_BASE + '/api/cosmetics', { credentials: 'include' });
       if (!res.ok) { console.error('loadCustomizeShop: /api/cosmetics returned', res.status); return; }
       const data = await res.json();
       document.getElementById('customize-coins-count').textContent = data.coins;
@@ -2474,8 +2508,9 @@
       btn.disabled = true;
       const { action, category, key } = btn.dataset;
       try {
-        const res = await fetch('/api/cosmetics/' + action, {
+        const res = await fetch(API_BASE + '/api/cosmetics/' + action, {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ category, key }),
         });
@@ -2525,7 +2560,7 @@
       listEl.innerHTML = '<p class="lb-loading">Loading...</p>';
       youRowEl.classList.add('hidden');
       try {
-        const res = await fetch('/api/leaderboard?period=' + leaderboardPeriod + '&limit=' + LEADERBOARD_HOME_SIZE);
+        const res = await fetch(API_BASE + '/api/leaderboard?period=' + leaderboardPeriod + '&limit=' + LEADERBOARD_HOME_SIZE, { credentials: 'include' });
         const data = await res.json();
         if (!data.leaderboard.length) {
           listEl.innerHTML = '<p class="lb-loading">' + (leaderboardPeriod === 'week' ? 'No ranked XP earned this week yet, be the first!' : 'No ranked players yet, be the first!') + '</p>';
@@ -2681,6 +2716,7 @@
       document.getElementById('hu').textContent = getDisplayName(playerName);
       document.getElementById('app').setAttribute('data-diff', difficulty);
       homeVisible = false;
+      cgGameplayStart();
       document.getElementById('site-shell').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
       // Force-hide the pause modal immediately - a fresh game should never open paused,
@@ -2722,6 +2758,7 @@
       document.getElementById('hu').textContent = getDisplayName(playerName);
       document.getElementById('app').setAttribute('data-diff', difficulty);
       homeVisible = false;
+      cgGameplayStart();
       document.getElementById('site-shell').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
       document.getElementById('pause-modal').classList.add('hidden');
@@ -2837,6 +2874,7 @@
     });
     function leaveToHome() {
       homeVisible = true;
+      cgGameplayStop();
       if (roomMode) {
         // Leaving a room detaches this one socket - the seat itself persists
         // (server-side grace period) so rejoining with the same code resumes
@@ -3790,7 +3828,7 @@
 
     async function loadTournamentStatus() {
       try {
-        const res = await fetch('/api/tournament/status');
+        const res = await fetch(API_BASE + '/api/tournament/status', { credentials: 'include' });
         tournamentStatus = await res.json();
         renderTournamentPage();
       } catch (e) { console.error('loadTournamentStatus failed:', e); }
@@ -3804,8 +3842,9 @@
         return;
       }
       try {
-        const res = await fetch('/api/tournament/enter', {
+        const res = await fetch(API_BASE + '/api/tournament/enter', {
           method: 'POST',
+          credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ tierKey: btn.dataset.tierKey }),
         });
@@ -3866,7 +3905,7 @@
     });
     document.getElementById('btn-tournament-exit-confirm').addEventListener('click', async () => {
       document.getElementById('tournament-exit-confirm-modal').classList.add('hidden');
-      try { await fetch('/api/tournament/exit', { method: 'POST' }); } catch (e) { console.error('tournament exit failed:', e); }
+      try { await fetch(API_BASE + '/api/tournament/exit', { method: 'POST', credentials: 'include' }); } catch (e) { console.error('tournament exit failed:', e); }
       await loadTournamentStatus();
     });
 
@@ -3963,7 +4002,7 @@
 
     async function loadSpinStatus() {
       try {
-        const res = await fetch('/api/spins/status');
+        const res = await fetch(API_BASE + '/api/spins/status', { credentials: 'include' });
         spinStatus = await res.json();
         renderSpinsPage();
       } catch (e) { console.error('loadSpinStatus failed:', e); }
@@ -4042,7 +4081,7 @@
       document.getElementById('spin-result').classList.add('hidden');
       renderSpinsPage();
       try {
-        const res = await fetch('/api/spins/spin', { method: 'POST' });
+        const res = await fetch(API_BASE + '/api/spins/spin', { method: 'POST', credentials: 'include' });
         const data = await res.json();
         if (!res.ok || !data.ok) {
           showToast(data.error || "Couldn't spin.", { className: 'toast-coins-loss' });

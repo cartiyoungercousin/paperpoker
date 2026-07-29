@@ -83,6 +83,10 @@ app.use((req, res, next) => {
     const sessionId = crypto.randomUUID();
     res.setHeader("Set-Cookie", serializeCookie(SESSION_COOKIE, sessionId, { maxAge: SESSION_MAX_AGE, secure: IS_PRODUCTION }));
     req.ppSessionId = sessionId;
+    // Logged once per newly-minted session cookie (see site_visits' own
+    // schema comment for why this is the right hook point, not every
+    // request) - this is what backs the admin dashboard's visitor count.
+    db.prepare("INSERT INTO site_visits (session_id, visited_at) VALUES (?, ?)").run(sessionId, Date.now());
   } else {
     req.ppSessionId = cookies[SESSION_COOKIE];
   }

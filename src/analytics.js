@@ -32,6 +32,26 @@ function getSignupsByDay(db, days = 30) {
   return [...counts.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, count]) => ({ date, count }));
 }
 
+// One row per day for the last `days` days (including today), oldest first,
+// counting NEW site_visits rows - i.e. distinct new-visitor sessions, not
+// total requests (see site_visits' own schema comment in src/db.js). Zero-
+// filled the same way getSignupsByDay is, for the same reason - a chart
+// should never have to guess at a missing date.
+function getVisitorsByDay(db, days = 30) {
+  const since = Date.now() - days * DAY_MS;
+  const rows = db.prepare("SELECT visited_at FROM site_visits WHERE visited_at >= ?").all(since);
+
+  const counts = new Map();
+  for (let i = 0; i < days; i++) {
+    counts.set(utcDateString(Date.now() - i * DAY_MS), 0);
+  }
+  for (const row of rows) {
+    const key = utcDateString(row.visited_at);
+    if (counts.has(key)) counts.set(key, counts.get(key) + 1);
+  }
+  return [...counts.entries()].sort(([a], [b]) => (a < b ? -1 : 1)).map(([date, count]) => ({ date, count }));
+}
+
 // Daily/weekly/monthly active users, from the last_active_at timestamp
 // resolveSession() maintains (throttled to one write per 5 minutes per
 // user, so this reflects real distinct-day activity, not request volume).
@@ -82,16 +102,21 @@ function getTotals(db) {
       COALESCE(SUM(coins), 0) AS totalCoinsOutstanding
     FROM users
   `).get();
-  return row;
+  // Separate table (site_visits), so a separate query - counts every
+  // visitor session ever logged (logged-in or not), unlike totalUsers above
+  // which only counts people who went on to create an account.
+  const { totalVisitors } = db.prepare("SELECT COUNT(*) AS totalVisitors FROM site_visits").get();
+  return { ...row, totalVisitors };
 }
 
 function getDashboardStats(db, days = 30) {
   return {
     signupsByDay: getSignupsByDay(db, days),
+    visitorsByDay: getVisitorsByDay(db, days),
     activeUsers: getActiveUserCounts(db),
     retention: getRetention(db),
     totals: getTotals(db),
   };
 }
 
-export { getSignupsByDay, getActiveUserCounts, getRetention, getTotals, getDashboardStats };
+export { getSignupsByDay, getVisitorsByDay, getActiveUserCounts, getRetention, getTotals, getDashboardStats };

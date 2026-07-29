@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { openDb } from "../src/db.js";
-import { getSignupsByDay, getActiveUserCounts, getRetention, getTotals, getDashboardStats } from "../src/analytics.js";
+import { getSignupsByDay, getVisitorsByDay, getActiveUserCounts, getRetention, getTotals, getDashboardStats } from "../src/analytics.js";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+function seedVisit(db, visitedAt) {
+  db.prepare("INSERT INTO site_visits (session_id, visited_at) VALUES (?, ?)").run(`s${Math.random()}`, visitedAt);
+}
 
 function seedUser(db, { createdAt, lastActiveAt, handsPlayed = 0, rankedSeconds = 0, coins = 0 } = {}) {
   const info = db.prepare(`
@@ -37,6 +41,29 @@ test("getSignupsByDay ignores signups older than the requested window", () => {
   seedUser(db, { createdAt: now - 40 * DAY_MS });
 
   const days = getSignupsByDay(db, 30);
+  const total = days.reduce((sum, d) => sum + d.count, 0);
+  assert.equal(total, 0);
+});
+
+test("getVisitorsByDay zero-fills every day in range, even ones with no visits", () => {
+  const db = openDb(":memory:");
+  const now = Date.now();
+  seedVisit(db, now);
+  seedVisit(db, now);
+  seedVisit(db, now - 2 * DAY_MS);
+
+  const days = getVisitorsByDay(db, 5);
+  assert.equal(days.length, 5);
+  assert.equal(days[days.length - 1].count, 2, "today should have 2 visits");
+  assert.equal(days[days.length - 3].count, 1, "2 days ago should have 1 visit");
+  assert.equal(days[days.length - 2].count, 0, "yesterday should be zero-filled, not missing");
+});
+
+test("getVisitorsByDay ignores visits older than the requested window", () => {
+  const db = openDb(":memory:");
+  seedVisit(db, Date.now() - 40 * DAY_MS);
+
+  const days = getVisitorsByDay(db, 30);
   const total = days.reduce((sum, d) => sum + d.count, 0);
   assert.equal(total, 0);
 });
@@ -94,6 +121,21 @@ test("getTotals sums hands played, ranked seconds, and coins across every accoun
   assert.equal(totals.totalCoinsOutstanding, 75);
 });
 
+// totalVisitors counts EVERY visitor session ever logged, regardless of
+// whether they ever created an account - deliberately independent of
+// totalUsers, which only counts people who went on to sign up.
+test("getTotals counts every logged visitor session, whether or not they ever created an account", () => {
+  const db = openDb(":memory:");
+  seedUser(db, { createdAt: Date.now() }); // one account created
+  seedVisit(db, Date.now());
+  seedVisit(db, Date.now());
+  seedVisit(db, Date.now() - 5 * DAY_MS);
+
+  const totals = getTotals(db);
+  assert.equal(totals.totalUsers, 1);
+  assert.equal(totals.totalVisitors, 3, "visitor sessions are counted independently of signups");
+});
+
 test("getTotals handles a brand-new, empty database without throwing or returning null", () => {
   const db = openDb(":memory:");
   const totals = getTotals(db);
@@ -101,13 +143,17 @@ test("getTotals handles a brand-new, empty database without throwing or returnin
   assert.equal(totals.totalHandsPlayed, 0);
   assert.equal(totals.totalRankedSecondsPlayed, 0);
   assert.equal(totals.totalCoinsOutstanding, 0);
+  assert.equal(totals.totalVisitors, 0);
 });
 
-test("getDashboardStats bundles all four sections together", () => {
+test("getDashboardStats bundles signups, visitors, active users, retention, and totals together", () => {
   const db = openDb(":memory:");
   seedUser(db, { createdAt: Date.now(), lastActiveAt: Date.now() });
+  seedVisit(db, Date.now());
   const stats = getDashboardStats(db, 7);
   assert.equal(stats.signupsByDay.length, 7);
+  assert.equal(stats.visitorsByDay.length, 7);
+  assert.equal(stats.visitorsByDay[stats.visitorsByDay.length - 1].count, 1);
   assert.ok(stats.activeUsers);
   assert.ok(stats.retention);
   assert.ok(stats.totals);

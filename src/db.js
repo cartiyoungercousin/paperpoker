@@ -93,6 +93,22 @@ const SCHEMA = `
   -- insert rather than silently creating two simultaneous runs.
   CREATE UNIQUE INDEX IF NOT EXISTS idx_tournament_active_run
     ON tournament_runs(user_id) WHERE ended_at IS NULL;
+
+  -- One row per NEW anonymous session cookie issued (see server.js's
+  -- SESSION_COOKIE middleware), not one row per request/pageview - that
+  -- middleware runs on literally every request (every asset, API call,
+  -- socket.io poll), so logging there directly would wildly overcount. A
+  -- new session cookie is only minted the first time a browser shows up
+  -- without one (a genuinely new visitor, or an old one whose 30-day cookie
+  -- expired/was cleared), which is exactly the "how many people have
+  -- visited" signal the admin dashboard wants - logged in or not.
+  CREATE TABLE IF NOT EXISTS site_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    visited_at INTEGER NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_site_visits_visited_at ON site_visits(visited_at);
 `;
 
 // CREATE TABLE IF NOT EXISTS only helps a table that doesn't exist yet - it's

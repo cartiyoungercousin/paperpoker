@@ -72,7 +72,7 @@
     margin: 0 0 16px;
     color: #e8e4dc;
   }
-  #chart {
+  .chart {
     display: flex;
     align-items: flex-end;
     gap: 3px;
@@ -124,14 +124,19 @@
     <div class="card-row" id="retention-row"></div>
 
     <section>
-      <h2>Signups per day
+      <h2>Visitors per day
         <select id="days-select">
           <option value="14">Last 14 days</option>
           <option value="30" selected>Last 30 days</option>
           <option value="90">Last 90 days</option>
         </select>
       </h2>
-      <div id="chart"></div>
+      <div id="visitors-chart" class="chart"></div>
+    </section>
+
+    <section>
+      <h2>Signups per day</h2>
+      <div id="signups-chart" class="chart"></div>
     </section>
   </div>
 
@@ -145,9 +150,9 @@
     return x == null ? '-' : Math.round(x * 100) + '%';
   }
 
-  function renderChart(signupsByDay) {
-    const max = Math.max(1, ...signupsByDay.map((d) => d.count));
-    document.getElementById('chart').innerHTML = signupsByDay.map((d) => {
+  function renderChart(targetId, byDay) {
+    const max = Math.max(1, ...byDay.map((d) => d.count));
+    document.getElementById(targetId).innerHTML = byDay.map((d) => {
       const heightPct = Math.max(2, Math.round((d.count / max) * 100));
       const shortDate = d.date.slice(5); // "MM-DD"
       return '<div class="bar-col" title="' + d.date + ': ' + d.count + '">' +
@@ -172,6 +177,7 @@
     document.getElementById('dashboard').style.display = 'block';
 
     document.getElementById('totals-row').innerHTML = [
+      statCard('Total Visitors', data.totals.totalVisitors, 'distinct visitor sessions, all-time'),
       statCard('Total Accounts', data.totals.totalUsers),
       statCard('Hands Played (all-time)', data.totals.totalHandsPlayed),
       statCard('Ranked Hours Played', (data.totals.totalRankedSecondsPlayed / 3600).toFixed(1) + 'h'),
@@ -189,7 +195,8 @@
       statCard('Day-7 Retention', pct(data.retention.day7), data.retention.day7Cohort + ' users eligible'),
     ].join('');
 
-    renderChart(data.signupsByDay);
+    renderChart('visitors-chart', data.visitorsByDay);
+    renderChart('signups-chart', data.signupsByDay);
   }
 
   document.getElementById('days-select').addEventListener('change', (e) => load(e.target.value));

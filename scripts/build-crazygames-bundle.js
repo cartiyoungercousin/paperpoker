@@ -48,9 +48,16 @@ const CLIENT_FILES = [
 ];
 const CLIENT_DIRS = ["assets"];
 
-// CrazyGames SDK CDN URL - confirm this is still current against
-// https://docs.crazygames.com/sdk/html5-v2/intro/ before relying on it.
-const CRAZYGAMES_SDK_SCRIPT_URL = "https://sdk.crazygames.com/crazygames-sdk-v3.js";
+// CrazyGames SDK CDN URL - this exact URL (including the v2 in the
+// filename - NOT a typo, this is genuinely their current documented
+// version) is copied verbatim from https://docs.crazygames.com/sdk/html5-v2/intro/.
+// An earlier version of this script used a "v3" URL found via a search
+// result rather than their own docs - it happened to load and self-report
+// a real version number when tested directly, so the bug went unnoticed in
+// local testing, but CrazyGames' own upload scanner didn't recognize it and
+// reported "SDK not currently detected." Always get this from their actual
+// docs page, not a search snippet, if it ever needs to change again.
+const CRAZYGAMES_SDK_SCRIPT_URL = "https://sdk.crazygames.com/crazygames-sdk-v2.js";
 
 function copyRecursive(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
@@ -105,8 +112,8 @@ function buildIndexHtml() {
   const $final = cheerio.load(afterApiBase, { decodeEntities: false });
 
   // The SDK script tag itself is ONLY ever added here, never committed to
-  // the source file - see index.html's own cgSdkInit/cgGameplayStart/Stop
-  // comment for why the call sites are safe to keep in source unconditionally.
+  // the source file - see index.html's own cgGameplayStart/Stop comment for
+  // why the call sites are safe to keep in source unconditionally.
   $final("head").append(`<script src="${CRAZYGAMES_SDK_SCRIPT_URL}"></script>\n`);
 
   return $final.html();

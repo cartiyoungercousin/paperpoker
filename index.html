@@ -1231,17 +1231,16 @@
     // bundle.js) or in local/non-CrazyGames testing. These are permanent,
     // unconditional no-ops everywhere except an actual CrazyGames-hosted
     // build, so they're safe to leave in source rather than needing their
-    // own build-time injection.
-    function cgSdkInit() {
-      if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.init();
-    }
+    // own build-time injection. No explicit init() call - per CrazyGames'
+    // own docs, "the SDK doesn't need to be initialized before being used,
+    // the initialization is done internally" - calling a nonexistent
+    // .init() method would throw instead of no-op.
     function cgGameplayStart() {
       if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStart();
     }
     function cgGameplayStop() {
       if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStop();
     }
-    cgSdkInit();
     const SS = { h:'♥', d:'♦', c:'♣', s:'♠' };
     const SC = { h:'#d32f2f', d:'#d32f2f', c:'#1a1a2e', s:'#1a1a2e' };
     const RD = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};

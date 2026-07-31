@@ -2903,42 +2903,13 @@ body::before {
   transform: translateY(-2px)
 }
 
-/* ===== App Layout =====
-   #app-viewport is the real, full-browser-window box; #app itself is now a
-   FIXED-size canvas (1500x850 - measured as the natural minimum comfortable
-   size: 200px left-panel + 1260px table-wrapper + its own padding for
-   width, header + table-wrapper + the hole-card/action row + hotkey-hint
-   for height, both with a little breathing room). #app used to just be
-   height:100vh, sized to whatever the real window happened to be - fine on
-   a normal desktop browser, but on a smaller embed window (e.g. CrazyGames'
-   documented non-fullscreen sizes, some as small as 821x462 - well under
-   this layout's natural footprint) that meant #table-wrapper's own fixed
-   1260px width got silently clipped by #center-area's overflow-x:hidden,
-   with no way to scroll to the missing part. Giving #app a fixed size and
-   letting #app-viewport (see fitAppToViewport() in the script below)
-   uniformly scale it down via a CSS transform means every element inside
-   still lays out exactly as designed, just visually smaller - nothing
-   clips, and on a big-enough window (including real fullscreen) the scale
-   is capped at 1 so it renders at true, unscaled size rather than being
-   stretched larger than intended. */
-#app-viewport {
-  position: fixed;
-  inset: 0;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #000;
-}
+/* ===== App Layout ===== */
 #app {
   display: flex;
   flex-direction: column;
-  width: 1500px;
-  height: 850px;
-  flex-shrink: 0;
+  height: 100vh;
   overflow: hidden;
   position: relative;
-  transform-origin: center center;
   z-index: 1
 }
 

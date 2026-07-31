@@ -912,7 +912,7 @@
   </div>
 
   <!-- ===== MAIN GAME ===== -->
-  <div id="app-viewport"><div id="app" class="hidden">
+  <div id="app" class="hidden">
     <!-- Pause Modal -->
     <div id="pause-modal" class="hidden">
       <div id="pause-card">
@@ -1127,7 +1127,7 @@
       <!-- Right spacer -->
       <div id="right-spacer"></div>
     </div>
-  </div></div>
+  </div>
 
   <!-- ===== HAND ANALYZER MODAL ===== -->
   <div id="analyzer-modal" class="hidden">
@@ -1242,27 +1242,6 @@
       if (window.CrazyGames && window.CrazyGames.SDK) window.CrazyGames.SDK.game.gameplayStop();
     }
     cgSdkInit();
-
-    // #app is a fixed 1500x850 canvas (see styles.css's own comment on
-    // #app-viewport/#app for the exact measurements this is based on) -
-    // scaled down via a CSS transform to fit whatever real window/embed
-    // size is actually available, capped at 1 so it's never stretched
-    // LARGER than its true design size once there's enough room (a real
-    // fullscreen browser window, for instance). This matters most for
-    // embed contexts smaller than a normal desktop browser tab (e.g.
-    // CrazyGames' documented non-fullscreen sizes go as small as 821x462,
-    // well under this layout's ~1500x850 natural footprint) - without it,
-    // #table-wrapper's own fixed 1260px width would silently clip against
-    // #center-area's overflow-x:hidden with no way to scroll to the rest.
-    const APP_NATURAL_WIDTH = 1500;
-    const APP_NATURAL_HEIGHT = 850;
-    function fitAppToViewport() {
-      const scale = Math.min(1, window.innerWidth / APP_NATURAL_WIDTH, window.innerHeight / APP_NATURAL_HEIGHT);
-      document.getElementById('app').style.transform = 'scale(' + scale + ')';
-    }
-    fitAppToViewport();
-    window.addEventListener('resize', fitAppToViewport);
-
     const SS = { h:'♥', d:'♦', c:'♣', s:'♠' };
     const SC = { h:'#d32f2f', d:'#d32f2f', c:'#1a1a2e', s:'#1a1a2e' };
     const RD = {2:'2',3:'3',4:'4',5:'5',6:'6',7:'7',8:'8',9:'9',10:'10',11:'J',12:'Q',13:'K',14:'A'};
